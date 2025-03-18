@@ -1,3 +1,6 @@
+# Builds
+dev-dist/
+dist/
 # Packages
 node_modules/
 package-lock.json

@@ -1,8 +1,12 @@
 #!/bin/bash
 
+# TODO: Delete this block and update REMOTE_DIR
+echo "You still need to update this file..."
+exit 1
+
 # Define variables
 REMOTE_SERVER="ector.websanity.com"
-REMOTE_DIR="/var/www/patrickdwyer.com"
+REMOTE_DIR=""
 LOCAL_DIR="dist/"
 
 # Execute rsync command to sync files and capture the output

@@ -14,9 +14,9 @@ export default defineConfig({
 			},
 
 			manifest: {
-				name: "patrickdwyer.com",
-				short_name: "patrickdwyer.com",
-				description: "Personal resume website for Patrick Dwyer",
+				name: "Boilerplate",
+				short_name: "Boilerplate",
+				description: "Boilerplate Description",
 				theme_color: "#D3D3FF",
 			},
 
