@@ -3,16 +3,20 @@
  */
 
 // Function composition (right to left)
-export const compose =
-	(...fns) =>
-	(x) =>
-		fns.reduceRight((acc, fn) => fn(acc), x);
+export const compose = (...fns) =>
+	fns.reduce(
+		(f, g) =>
+			(...args) =>
+				f(g(...args))
+	);
 
 // Function composition (left to right)
-export const pipe =
-	(...fns) =>
-	(x) =>
-		fns.reduce((acc, fn) => fn(acc), x);
+export const pipe = (...fns) =>
+	fns.reduce(
+		(f, g) =>
+			(...args) =>
+				g(f(...args))
+	);
 
 // Curry function implementation
 export const curry = (fn) => {
@@ -45,3 +49,33 @@ export const tap = curry((fn, x) => {
 
 // Safe property access
 export const prop = curry((key, obj) => obj?.[key]);
+
+/**
+ * Creates a function that memoizes the result of a function
+ * @param {Function} fn - Function to memoize
+ * @returns {Function} Memoized function
+ */
+export const memoize = (fn) => {
+	const cache = new Map();
+	return (...args) => {
+		const key = JSON.stringify(args);
+		if (!cache.has(key)) {
+			cache.set(key, fn(...args));
+		}
+		return cache.get(key);
+	};
+};
+
+/**
+ * Creates a function that debounces another function
+ * @param {Function} fn - Function to debounce
+ * @param {number} delay - Delay in milliseconds
+ * @returns {Function} Debounced function
+ */
+export const debounce = (fn, delay) => {
+	let timeoutId;
+	return (...args) => {
+		clearTimeout(timeoutId);
+		timeoutId = setTimeout(() => fn(...args), delay);
+	};
+};

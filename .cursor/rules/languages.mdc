@@ -1,0 +1,82 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+---
+description: Core language guidelines for web development
+globs: 
+alwaysApply: true
+---
+# Rule Name: Languages
+Description: This rule describes which languages should be used and when to use each.
+
+## Core Technologies
+- Use only HTML, SCSS, and JavaScript
+- Use SCSS instead of pure CSS
+  - We have an automatic SCSS -> CSS compiler cursor extension
+- Keep the codebase lightweight and maintainable
+- Favor HTML and SCSS solutions over JavaScript when possible
+
+## HTML Guidelines
+- Use semantic HTML5 elements appropriately
+- Structure content logically and hierarchically
+- Ensure proper accessibility with ARIA attributes when needed
+- Keep markup clean and meaningful
+
+✅ Good:
+```html
+<header>
+  <nav>
+    <ul>
+      <li><a href="/">Home</a></li>
+      <li><a href="/about">About</a></li>
+    </ul>
+  </nav>
+</header>
+<main>
+  <article>
+    <h1>Article Title</h1>
+    <section>
+      <h2>Section Heading</h2>
+      <p>Content goes here...</p>
+    </section>
+  </article>
+</main>
+<footer>
+  <p>&copy; 2024 Company Name</p>
+</footer>
+```
+
+❌ Bad:
+```html
+<div class="header">
+  <div class="nav">
+    <div class="menu">
+      <div>Home</div>
+      <div>About</div>
+    </div>
+  </div>
+</div>
+<div class="content">
+  <div class="article">
+    <div class="title">Article Title</div>
+    <!-- Avoid non-semantic divs -->
+  </div>
+</div>
+```
+
+## Implementation Priority
+1. Start with semantic HTML structure
+2. Style with SCSS
+3. Add JavaScript only when necessary for:
+   - Complex user interactions
+   - Dynamic data handling
+   - Features impossible with HTML/CSS alone
+
+## Best Practices
+- Ensure progressive enhancement
+- Maintain accessibility
+- Optimize performance
+- Test across browsers
+- Keep code simple and maintainable

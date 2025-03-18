@@ -12,6 +12,7 @@ Description: Guidelines for writing JavaScript in a functional, declarative styl
 - Use pure functions whenever possible
 - Implement dependency injection for better modularity
 - Compose functions to build complexity
+- Build modules and import them into @src/scripts/main.js
 
 ## Key Guidelines
 

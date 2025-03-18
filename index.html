@@ -4,12 +4,37 @@
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>Boilerplate</title>
+	<title>Draw - A Simple Drawing App</title>
+	<link rel="stylesheet" href="/src/styles/main.scss">
 	<script defer src="/src/scripts/main.js" type="module"></script>
 </head>
 
 <body>
-	
+	<header class="app-header">
+		<h1>Draw</h1>
+		<nav class="toolbar">
+			<button type="button" class="tool-button" data-tool="pencil" aria-label="Pencil tool">
+				<span class="icon">✏️</span>
+			</button>
+			<button type="button" class="tool-button" data-tool="eraser" aria-label="Eraser tool">
+				<span class="icon">🧹</span>
+			</button>
+			<button type="button" class="tool-button" data-tool="clear" aria-label="Clear canvas">
+				<span class="icon">🗑️</span>
+			</button>
+			<div class="color-picker">
+				<input type="color" id="colorPicker" aria-label="Choose drawing color">
+			</div>
+		</nav>
+	</header>
+
+	<main class="app-main">
+		<canvas id="drawingCanvas" aria-label="Drawing canvas"></canvas>
+	</main>
+
+	<footer class="app-footer">
+		<p>Click and drag to draw. Use the toolbar to change tools and colors.</p>
+	</footer>
 </body>
 
 </html>

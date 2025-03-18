@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulate - Drawing App</title>
+    <link rel="stylesheet" href="/src/styles/main.scss">
+    <script defer src="/src/scripts/simulate.js" type="module"></script>
+</head>
+<body>
+    <header class="app-header">
+        <h1>Simulate</h1>
+        <nav class="toolbar">
+            <button type="button" class="tool-button" data-tool="simulate" aria-label="Start simulation">
+                <span class="icon">▶️</span>
+            </button>
+            <button type="button" class="tool-button" data-tool="pause" aria-label="Pause simulation">
+                <span class="icon">⏸️</span>
+            </button>
+            <button type="button" class="tool-button" data-tool="reset" aria-label="Reset simulation">
+                <span class="icon">🔄</span>
+            </button>
+        </nav>
+    </header>
+
+    <main class="app-main">
+        <canvas id="simulationCanvas" aria-label="Simulation canvas"></canvas>
+    </main>
+
+    <footer class="app-footer">
+        <p>Click simulate to start the drawing simulation.</p>
+    </footer>
+</body>
+</html> 
