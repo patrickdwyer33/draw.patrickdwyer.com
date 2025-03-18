@@ -10,7 +10,7 @@ Create a new repository at Github named for the new site URL: `project-title.pat
 
 Clone the this repository:
 
-`git clone git@github.com:patrickdwyer/boilerplate.git --recurse-submodules`
+`git clone git@github.com:patrickdwyer33/boilerplate.git --recurse-submodules`
 
 Rename the new project directory:
 
@@ -26,7 +26,7 @@ Remove the link to the boilerplate repository:
 
 Add the new repository as the origin:
 
-`git remote add origin git@github.com:patrickdwyer/project-title.patrickdwyer.com.git`
+`git remote add origin git@github.com:patrickdwyer33/project-title.patrickdwyer.com.git`
 
 Push everything to the new repository:
 
