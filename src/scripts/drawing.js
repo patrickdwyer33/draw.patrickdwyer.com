@@ -92,5 +92,16 @@ export const setupUserDrawing = (window, document, canvasId) => {
 	canvas.addEventListener("mouseup", handlers.handleMouseUp);
 	canvas.addEventListener("mouseout", handlers.handleMouseUp);
 
+	// Set up toolbar events
+	document
+		.querySelector(".toolbar")
+		.addEventListener("click", handlers.handleToolChange);
+	document
+		.querySelector("#color-picker")
+		.addEventListener("input", handlers.handleColorChange);
+
+	// Set initial active tool
+	document.querySelector("#pencil-button").classList.add("active");
+
 	return { state, handlers };
 };

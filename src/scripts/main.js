@@ -31,17 +31,3 @@ routeHandler.fold(
 	(error) => console.error(error),
 	(_) => console.log("Route handled successfully")
 );
-
-// // Initialize drawing page
-// const { state, handlers } = setupDrawingCanvas("drawingCanvas");
-
-// // Set up toolbar events
-// document
-// 	.querySelector(".toolbar")
-// 	.addEventListener("click", handlers.handleToolChange);
-// document
-// 	.getElementById("colorPicker")
-// 	.addEventListener("input", handlers.handleColorChange);
-
-// // Set initial active tool
-// document.querySelector('[data-tool="pencil"]').classList.add("active");
