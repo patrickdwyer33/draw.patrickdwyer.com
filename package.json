@@ -1,11 +1,11 @@
 {
-  "name": "patrickdwyer.com",
+  "name": "draw.patrickdwyer.com",
   "private": true,
   "version": "0.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "node index-to-pdf.js && vite build",
+    "build": "vite build",
     "preview": "vite preview"
   },
   "devDependencies": {

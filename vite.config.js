@@ -14,9 +14,9 @@ export default defineConfig({
 			},
 
 			manifest: {
-				name: "Boilerplate",
-				short_name: "Boilerplate",
-				description: "Boilerplate Description",
+				name: "draw.patrickdwyer.com",
+				short_name: "draw",
+				description: "Draws using physics based simulation",
 				theme_color: "#D3D3FF",
 			},
 

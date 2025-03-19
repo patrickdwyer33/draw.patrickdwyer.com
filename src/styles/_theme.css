@@ -1,6 +1,5 @@
-@use 'boilerplate' as *;
-
-@use 'fonts' as *;
+@import '_boilerplate.css';
+@import '_fonts.css';
 
 html {
     --page-width: 1000px;
@@ -77,7 +76,7 @@ footer {
     justify-content: center;
 }
 
-// SVG Sprites
+/* SVG Sprites */
 svg#sprites {
     visibility: hidden;
     height: 0;

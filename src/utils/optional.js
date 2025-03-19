@@ -15,10 +15,6 @@ class Optional {
 	static of(value) {
 		return value == null ? Optional.none() : Optional.some(value);
 	}
-
-	static fromNullable(value) {
-		return Optional.of(value);
-	}
 }
 
 class Some extends Optional {

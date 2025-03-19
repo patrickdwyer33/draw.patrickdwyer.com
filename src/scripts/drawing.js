@@ -73,7 +73,7 @@ export const createDrawingHandlers = (state) => ({
 });
 
 // Canvas setup
-export const setupDrawingCanvas = (canvasId) => {
+export const setupUserDrawing = (canvasId) => {
 	const canvas = document.getElementById(canvasId);
 	canvas.width = window.innerWidth * 0.8;
 	canvas.height = window.innerHeight * 0.6;
