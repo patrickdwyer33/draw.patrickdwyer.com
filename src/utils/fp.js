@@ -4,7 +4,7 @@
 
 // Function composition (right to left)
 export const compose = (...fns) =>
-	fns.reduce(
+	fns.reduceRight(
 		(f, g) =>
 			(...args) =>
 				f(g(...args))

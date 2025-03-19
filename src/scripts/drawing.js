@@ -11,6 +11,7 @@ export const createCanvasContext = (canvas) => {
 export const setDrawingStyle = (ctx, { color, lineWidth }) => {
 	ctx.strokeStyle = color;
 	ctx.lineWidth = lineWidth;
+	return ctx;
 };
 
 export const drawLine = (ctx, startX, startY, endX, endY) => {
@@ -73,7 +74,7 @@ export const createDrawingHandlers = (state) => ({
 });
 
 // Canvas setup
-export const setupUserDrawing = (canvasId) => {
+export const setupUserDrawing = (window, document, canvasId) => {
 	const canvas = document.getElementById(canvasId);
 	canvas.width = window.innerWidth * 0.8;
 	canvas.height = window.innerHeight * 0.6;
