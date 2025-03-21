@@ -1,7 +1,9 @@
-import { initPWA } from "./pwa.js";
-import { setupUserDrawing } from "./drawing.js";
 import Optional from "../utils/optional.js";
 import Either from "../utils/either.js";
+
+import { initPWA } from "./pwa.js";
+import { setupUserDrawing } from "./drawing.js";
+import { setupSimulationCanvas } from "./simulation.js";
 
 // Initialize PWA
 const period = 60 * 1000;
@@ -15,7 +17,8 @@ const routes = {
 	},
 	"/simulation": () => {
 		console.log("Simulation route");
-		// Add your about route logic here
+		const canvasId = "simulation-canvas";
+		setupSimulationCanvas(canvasId);
 	},
 };
 

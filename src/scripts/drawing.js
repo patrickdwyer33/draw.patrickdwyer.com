@@ -1,7 +1,6 @@
 import { pipe } from "../utils/fp.js";
 
-// Pure functions for drawing operations
-export const createCanvasContext = (canvas) => {
+export const createDrawingCanvasContext = (canvas) => {
 	const ctx = canvas.getContext("2d");
 	ctx.lineCap = "round";
 	ctx.lineJoin = "round";
@@ -14,19 +13,19 @@ export const setDrawingStyle = (ctx, { color, lineWidth }) => {
 	return ctx;
 };
 
-export const drawLine = (ctx, startX, startY, endX, endY) => {
+const drawLine = (ctx, startX, startY, endX, endY) => {
 	ctx.beginPath();
 	ctx.moveTo(startX, startY);
 	ctx.lineTo(endX, endY);
 	ctx.stroke();
 };
 
-export const clearCanvas = (ctx, width, height) => {
+const clearCanvas = (ctx, width, height) => {
 	ctx.clearRect(0, 0, width, height);
 };
 
 // Drawing state management
-export const createDrawingState = () => ({
+const createDrawingState = () => ({
 	isDrawing: false,
 	currentTool: "pencil",
 	color: "#000000",
@@ -37,7 +36,7 @@ export const createDrawingState = () => ({
 });
 
 // Event handlers
-export const createDrawingHandlers = (state) => ({
+const createDrawingHandlers = (state, canvas) => ({
 	handleMouseDown: (e) => {
 		state.isDrawing = true;
 		[state.lastX, state.lastY] = [e.offsetX, e.offsetY];
@@ -54,15 +53,12 @@ export const createDrawingHandlers = (state) => ({
 	},
 
 	handleToolChange: (e) => {
-		const tool = e.target.closest(".tool-button")?.dataset.tool;
-		if (!tool) return;
+		state.ctx.strokeStyle =
+			e.target?.id === "eraser" ? "#ffffff" : state.color;
+	},
 
-		state.currentTool = tool;
-		if (tool === "eraser") {
-			state.ctx.strokeStyle = "#ffffff";
-		} else {
-			state.ctx.strokeStyle = state.color;
-		}
+	handleClear: () => {
+		clearCanvas(state.ctx, canvas.width, canvas.height);
 	},
 
 	handleColorChange: (e) => {
@@ -79,12 +75,12 @@ export const setupUserDrawing = (window, document, canvasId) => {
 	canvas.width = window.innerWidth * 0.8;
 	canvas.height = window.innerHeight * 0.6;
 
-	const state = createDrawingState();
+	const state = createDrawingCanvasContext(canvas);
 	state.ctx = pipe(createCanvasContext, (ctx) =>
 		setDrawingStyle(ctx, { color: state.color, lineWidth: state.lineWidth })
 	)(canvas);
 
-	const handlers = createDrawingHandlers(state);
+	const handlers = createDrawingHandlers(state, canvas);
 
 	// Event listeners
 	canvas.addEventListener("mousedown", handlers.handleMouseDown);
@@ -94,8 +90,13 @@ export const setupUserDrawing = (window, document, canvasId) => {
 
 	// Set up toolbar events
 	document
-		.querySelector(".toolbar")
-		.addEventListener("click", handlers.handleToolChange);
+		.querySelectorAll("#pencil-button,#eraser-button")
+		.forEach((ele) =>
+			ele.addEventListener("click", handlers.handleToolChange)
+		);
+	document
+		.querySelector("#clear-button")
+		.addEventListener("click", handlers.handleClear);
 	document
 		.querySelector("#color-picker")
 		.addEventListener("input", handlers.handleColorChange);
