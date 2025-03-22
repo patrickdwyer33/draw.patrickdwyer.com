@@ -1,7 +1,8 @@
-import { pipe } from "../utils/fp.js";
+import { pipe } from "src/scripts/utils/fp.js";
 
-export const createDrawingCanvasContext = (canvas) => {
+export const createDrawingCanvasContext = (canvas, devicePixelRatio) => {
 	const ctx = canvas.getContext("2d");
+	ctx.scale(devicePixelRatio, devicePixelRatio);
 	ctx.lineCap = "round";
 	ctx.lineJoin = "round";
 	return ctx;
@@ -70,15 +71,27 @@ const createDrawingHandlers = (state, canvas) => ({
 });
 
 // Canvas setup
-export const setupUserDrawing = (window, document, canvasId) => {
+export default function setupUserDrawing(document, canvasId) {
 	const canvas = document.getElementById(canvasId);
-	// canvas.width = window.innerWidth;
-	// canvas.height = window.innerHeight;
+
+	// Get the canvas's display size from CSS
+	const displayWidth = canvas.clientWidth;
+	const displayHeight = canvas.clientHeight;
+
+	// Get the device pixel ratio to handle high DPI displays
+	const dpr = window.devicePixelRatio || 1;
+
+	// Set the canvas's internal dimensions to match its display size
+	canvas.width = displayWidth * dpr;
+	canvas.height = displayHeight * dpr;
+
+	// Scale the context to handle high DPI displays
+	const ctx = canvas.getContext("2d");
 
 	const state = createDrawingState(canvas);
 	state.ctx = pipe(createDrawingCanvasContext, (ctx) =>
 		setDrawingStyle(ctx, { color: state.color, lineWidth: state.lineWidth })
-	)(canvas);
+	)(canvas, dpr);
 
 	const handlers = createDrawingHandlers(state, canvas);
 
@@ -105,4 +118,4 @@ export const setupUserDrawing = (window, document, canvasId) => {
 	document.querySelector("#pencil-button").classList.add("active");
 
 	return { state, handlers };
-};
+}

@@ -1,9 +1,9 @@
-import Optional from "../utils/optional.js";
-import Either from "../utils/either.js";
+import Optional from "src/scripts/utils/optional.js";
+import Either from "src/scripts/utils/either.js";
 
-import { initPWA } from "./pwa.js";
-import { setupUserDrawing } from "./drawing.js";
-// import { setupSimulationCanvas } from "./webgl/simulation.js";
+import initPWA from "src/scripts/pwa.js";
+import setupUserDrawing from "src/scripts/drawing.js";
+import runSimulation from "src/scripts/webgl/simulation.js";
 
 // Initialize PWA
 const period = 60 * 1000;
@@ -13,12 +13,13 @@ const routes = {
 	"/": () => {
 		console.log("Main route");
 		const canvasId = "drawing-canvas";
-		setupUserDrawing(window, document, canvasId);
+		setupUserDrawing(document, canvasId);
 	},
 	"/simulation": () => {
 		console.log("Simulation route");
 		const canvasId = "simulation-canvas";
-		setupSimulationCanvas(canvasId);
+		const clearColor = [0.0, 0.0, 0.0, 1.0];
+		runSimulation(canvasId, clearColor);
 	},
 };
 

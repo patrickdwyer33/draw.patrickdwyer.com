@@ -1,6 +1,6 @@
 import { registerSW } from "virtual:pwa-register";
 
-export function initPWA(period) {
+export default function initPWA(period) {
 	/**@type {(reloadPage?: boolean) => Promise<void>}*/
 	let refreshSW;
 

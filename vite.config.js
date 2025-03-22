@@ -45,4 +45,10 @@ export default defineConfig({
 			credentials: true,
 		},
 	},
+
+	resolve: {
+		alias: {
+			src: "/src",
+		},
+	},
 });
