@@ -15,7 +15,7 @@ const routes = {
 		const canvasId = "drawing-canvas";
 		setupUserDrawing(document, canvasId);
 	},
-	"/simulation": () => {
+	"/simulate": () => {
 		console.log("Simulation route");
 		const canvasId = "simulation-canvas";
 		const clearColor = [0.0, 0.0, 0.0, 1.0];

@@ -1,5 +1,5 @@
 export default function init(canvasId, clearColor) {
-	const canvas = document.querySelector(canvasId);
+	const canvas = document.getElementById(canvasId);
 	// Initialize the GL context
 	const gl = canvas.getContext("webgl");
 
