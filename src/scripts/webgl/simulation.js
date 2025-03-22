@@ -36,10 +36,30 @@ export default async function runSimulation(canvasId, clearColor) {
 	let n = 20; //temp
 	const buffers = initBuffers(gl, n);
 
-	drawScene(gl, 0.0, programInfo, buffers, clearColor, n);
+	// Initialize animation state
+	const state = {
+		velocities: new Float32Array(n * 2),
+		continueAnimation: true,
+	};
+
+	// Initialize random velocities
+	for (let i = 0; i < n * 2; i++) {
+		state.velocities[i] = (Math.random() - 0.5) * 200; // Random velocity between -100 and 100
+	}
+
+	// Start animation loop
+	createAnimation(
+		updateAnimationState,
+		gl,
+		programInfo,
+		buffers,
+		clearColor,
+		n,
+		state
+	);
 }
 
-function drawScene(gl, _, programInfo, buffers, clearColor, n) {
+function drawScene(gl, programInfo, buffers, clearColor, n) {
 	gl.clearColor(...clearColor);
 	gl.clear(gl.COLOR_BUFFER_BIT);
 
@@ -84,4 +104,51 @@ function setResolutionUniform(gl, programInfo) {
 	gl.uniform1f(programInfo.uniformLocations.uEdgeSize, edgeSize);
 	const dotSize = 100.0;
 	gl.uniform1f(programInfo.uniformLocations.dotSize, dotSize);
+}
+
+function updateAnimationState(
+	deltaTime,
+	gl,
+	programInfo,
+	buffers,
+	clearColor,
+	n,
+	state
+) {
+	// Read current positions from the buffer
+	const positions = new Int16Array(n * 2);
+	gl.bindBuffer(gl.ARRAY_BUFFER, buffers.positions);
+	gl.getBufferSubData(gl.ARRAY_BUFFER, 0, positions);
+
+	// Update positions based on velocities
+	for (let i = 0; i < n; i++) {
+		const x = positions[i * 2];
+		const y = positions[i * 2 + 1];
+		const vx = state.velocities[i * 2];
+		const vy = state.velocities[i * 2 + 1];
+
+		// Update position
+		positions[i * 2] = x + vx * deltaTime;
+		positions[i * 2 + 1] = y + vy * deltaTime;
+
+		// Check for collisions with canvas boundaries
+		if (positions[i * 2] < 0 || positions[i * 2] > gl.canvas.width) {
+			state.velocities[i * 2] *= -1; // Reverse x velocity
+		}
+		if (
+			positions[i * 2 + 1] < 0 ||
+			positions[i * 2 + 1] > gl.canvas.height
+		) {
+			state.velocities[i * 2 + 1] *= -1; // Reverse y velocity
+		}
+	}
+
+	// Update the buffer with new positions
+	gl.bindBuffer(gl.ARRAY_BUFFER, buffers.positions);
+	gl.bufferSubData(gl.ARRAY_BUFFER, 0, positions);
+
+	// Draw the updated scene
+	drawScene(gl, programInfo, buffers, clearColor, n);
+
+	return state;
 }
