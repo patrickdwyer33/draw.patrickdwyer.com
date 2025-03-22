@@ -1,9 +1,11 @@
+import { resizeCanvasToDisplaySize } from "src/scripts/utils/webgl-utils.js";
+
 export default function init(canvasId, clearColor) {
 	const canvas = document.getElementById(canvasId);
-	// Initialize the GL context
-	const gl = canvas.getContext("webgl");
+	const gl = canvas.getContext("webgl", {
+		antialias: false,
+	});
 
-	// Only continue if WebGL is available and working
 	if (gl === null) {
 		alert(
 			"Unable to initialize WebGL. Your browser or machine may not support it."
@@ -11,7 +13,11 @@ export default function init(canvasId, clearColor) {
 		return;
 	}
 
+	resizeCanvasToDisplaySize(gl.canvas);
+	gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+
 	gl.clearColor(...clearColor);
-	// Clear the color buffer with specified clear color
 	gl.clear(gl.COLOR_BUFFER_BIT);
+
+	return gl;
 }

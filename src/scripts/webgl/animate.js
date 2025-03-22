@@ -1,4 +1,4 @@
-export default function createAnimation(fn) {
+export default function createAnimation(fn, ...args) {
 	let then = 0;
 
 	const render = (now) => {
@@ -6,7 +6,7 @@ export default function createAnimation(fn) {
 		deltaTime = now - then;
 		then = now;
 
-		let continueAnimation = fn(gl, programInfo, buffers, deltaTime);
+		let continueAnimation = fn(gl, deltaTime, ...args);
 		if (!continueAnimation) return;
 
 		requestAnimationFrame(render);
