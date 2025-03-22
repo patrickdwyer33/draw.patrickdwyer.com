@@ -14,10 +14,7 @@ body {
 
 main {
     background-color: white;
-    max-width: var(--page-width);
-    padding: clamp(1rem, 0.8rem + 1vw, 2rem);
     margin: auto;
-    box-shadow: 0 0 2em hsl(0 0% 0% / 0.7);
 }
 
 h1,

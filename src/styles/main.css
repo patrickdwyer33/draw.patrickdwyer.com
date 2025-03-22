@@ -1,1 +1,15 @@
-@import '_theme.css'
+@import '_theme.css';
+
+header {
+    height: 5vh;
+}
+
+main {
+    height: 95vh;
+}
+
+canvas {
+    width: 100%;
+    height: 100%;
+}
+

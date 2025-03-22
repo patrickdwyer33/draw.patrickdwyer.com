@@ -72,11 +72,11 @@ const createDrawingHandlers = (state, canvas) => ({
 // Canvas setup
 export const setupUserDrawing = (window, document, canvasId) => {
 	const canvas = document.getElementById(canvasId);
-	canvas.width = window.innerWidth * 0.8;
-	canvas.height = window.innerHeight * 0.6;
+	// canvas.width = window.innerWidth;
+	// canvas.height = window.innerHeight;
 
-	const state = createDrawingCanvasContext(canvas);
-	state.ctx = pipe(createCanvasContext, (ctx) =>
+	const state = createDrawingState(canvas);
+	state.ctx = pipe(createDrawingCanvasContext, (ctx) =>
 		setDrawingStyle(ctx, { color: state.color, lineWidth: state.lineWidth })
 	)(canvas);
 

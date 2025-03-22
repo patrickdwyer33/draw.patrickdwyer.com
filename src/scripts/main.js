@@ -3,7 +3,7 @@ import Either from "../utils/either.js";
 
 import { initPWA } from "./pwa.js";
 import { setupUserDrawing } from "./drawing.js";
-import { setupSimulationCanvas } from "./simulation.js";
+// import { setupSimulationCanvas } from "./webgl/simulation.js";
 
 // Initialize PWA
 const period = 60 * 1000;
