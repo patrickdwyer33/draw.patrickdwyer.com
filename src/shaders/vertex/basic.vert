@@ -2,9 +2,7 @@ attribute vec2 aPosition;
 
 uniform vec2 uResolution;
 
-varying float vSize;
 uniform float dotSize;
-uniform float uEdgeSize;
  
 // all shaders have a main function
   void main() {
@@ -18,8 +16,6 @@ uniform float uEdgeSize;
     vec2 clipSpace = zeroToTwo - 1.0;
  
     gl_Position = vec4(clipSpace, 0, 1);
-
-    vSize = 2.0 * sqrt(dotSize / 3.14159); // Calculate the diameter of the circle from the area
     
-    gl_PointSize = vSize + uEdgeSize + 1.0;
+    gl_PointSize = dotSize;
   }

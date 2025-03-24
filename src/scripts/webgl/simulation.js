@@ -34,11 +34,11 @@ export default async function runSimulation(canvasId, clearColor) {
 			dotSize: gl.getUniformLocation(shaderProgram, "dotSize"),
 		},
 	};
-	let n = 100; //temp
+	let n = 40; //temp
 	const buffers = initBuffers(gl, n);
 
 	const edgeSize = 1.0;
-	const dotSize = 100.0;
+	const dotSize = 10.0;
 
 	// Initialize animation state
 	const state = {
@@ -51,7 +51,6 @@ export default async function runSimulation(canvasId, clearColor) {
 		continueAnimation: true,
 		edgeSize,
 		dotSize,
-		dotDiameter: 2.0 * Math.sqrt(dotSize / Math.PI) + edgeSize + 1.0,
 	};
 
 	// Start animation loop
@@ -69,8 +68,8 @@ export default async function runSimulation(canvasId, clearColor) {
 function generateRandomPositions(n, width, height) {
 	const positions = [];
 	for (let i = 0; i < n; i++) {
-		const x = Math.floor(Math.random() * (width + 1));
-		const y = Math.floor(Math.random() * (height + 1));
+		const x = Math.random() * width;
+		const y = Math.random() * height;
 		positions.push(x, y);
 	}
 	return positions;
@@ -81,7 +80,7 @@ function generateRandomVelocities(n) {
 	for (let i = 0; i < n * 2; i++) {
 		let velocity =
 			Math.max(Math.random(), 0.4) *
-			100.0 *
+			10.0 *
 			(Math.random() < 0.5 ? -1.0 : 1.0);
 		velocities.push(velocity);
 	}
@@ -106,7 +105,7 @@ function drawScene(gl, programInfo, buffers, clearColor, n, state) {
 
 function setPositionAttribute(gl, buffers, programInfo) {
 	let numComponents = 2; // pull out 2 values per iteration
-	let type = gl.SHORT;
+	let type = gl.FLOAT;
 	let normalize = false; // don't normalize
 	let stride = 0; // how many bytes to get from one set of values to the next
 	// 0 = use type and numComponents above
@@ -133,6 +132,14 @@ function setResolutionUniform(gl, programInfo, state) {
 	gl.uniform1f(programInfo.uniformLocations.dotSize, state.dotSize);
 }
 
+// Returns distance between two indices in positions array squared
+function positionsArrayDistSquared(positions, idx1, idx2) {
+	return (
+		(positions[idx1 * 2] - positions[idx2 * 2]) ** 2 +
+		(positions[idx1 * 2 + 1] - positions[idx2 * 2 + 1]) ** 2
+	);
+}
+
 function updateAnimationState(
 	deltaTime,
 	gl,
@@ -142,7 +149,7 @@ function updateAnimationState(
 	n,
 	state
 ) {
-	const dotRadius = state.dotDiameter / 2;
+	const dotRadius = state.dotSize / 2;
 
 	const tree = new RBush(9);
 
@@ -168,10 +175,10 @@ function updateAnimationState(
 
 		// search tree
 		const bbox = {
-			minX: state.positions[i * 2] - dotRadius,
-			minY: state.positions[i * 2 + 1] - dotRadius,
-			maxX: state.positions[i * 2] + dotRadius,
-			maxY: state.positions[i * 2 + 1] + dotRadius,
+			minX: state.positions[i * 2] - dotRadius + 1.0,
+			minY: state.positions[i * 2 + 1] - dotRadius + 1.0,
+			maxX: state.positions[i * 2] + dotRadius + 1.0,
+			maxY: state.positions[i * 2 + 1] + dotRadius + 1.0,
 		};
 		const collisions = tree.search(bbox);
 		if (collisions.length === 0) {
@@ -186,24 +193,36 @@ function updateAnimationState(
 		let collision = collisions.pop(); // just handling one collision at a time for now. Will need to handle the edge case later
 		// also note that weird things may happen with current setup around the walls
 		// this loop handles the fact that the bounding box checks for square overlap
+		if (!collision) {
+			const vx = state.velocities[i * 2];
+			const vy = state.velocities[i * 2 + 1];
+
+			// Update position
+			state.positions[i * 2] = x + vx * deltaTime;
+			state.positions[i * 2 + 1] = y + vy * deltaTime;
+
+			continue;
+		}
+
 		while (
-			collision &&
-			Math.sqrt(
-				(state.positions[i * 2] -
-					state.positions[collision.index * 2]) **
-					2 +
-					(state.positions[i * 2 + 1] -
-						state.positions[collision.index * 2 + 1]) **
-						2
-			) > state.dotDiameter
+			positionsArrayDistSquared(state.positions, i, collision.index) >
+			state.dotSize ** 2 // same radius so we can just use diameter for collision detection
 		) {
 			collision = collisions.pop();
 			if (collision === undefined) {
+				collision = tree.search(bbox)[0];
+				console.log(
+					state.positions[i * 2],
+					state.positions[i * 2 + 1],
+					state.positions[collision.index * 2],
+					state.positions[collision.index * 2 + 1]
+				);
 				collision = false;
 				break;
 			}
 		}
 		if (collision) {
+			// get updated velocities after collision
 			const [vx1, vy1, vx2, vy2] = processCollision(
 				state.positions[i * 2],
 				state.positions[i * 2 + 1],
@@ -212,10 +231,9 @@ function updateAnimationState(
 				collision.x,
 				collision.y,
 				state.velocities[collision.index * 2],
-				state.velocities[collision.index * 2 + 1],
-				deltaTime
+				state.velocities[collision.index * 2 + 1]
 			);
-			// undo other particles movement before applying new velocities
+			// undo other particles movement before making checks
 			state.positions[collision.index * 2] -=
 				state.velocities[collision.index * 2] * deltaTime;
 			state.positions[collision.index * 2 + 1] -=
@@ -242,7 +260,7 @@ function updateAnimationState(
 
 	// Update the buffer with new positions
 	gl.bindBuffer(gl.ARRAY_BUFFER, buffers.positions);
-	gl.bufferSubData(gl.ARRAY_BUFFER, 0, new Int16Array(state.positions));
+	gl.bufferSubData(gl.ARRAY_BUFFER, 0, new Float32Array(state.positions));
 
 	// Draw the updated scene
 	drawScene(gl, programInfo, buffers, clearColor, n, state);
@@ -250,40 +268,37 @@ function updateAnimationState(
 	return state;
 }
 
-function processCollision(x1, y1, v1x, v1y, x2, y2, v2x, v2y, deltaTime) {
+function processCollision(x1, y1, v1x, v1y, x2, y2, v2x, v2y) {
 	// calculate line between
 	// calculate angle between og x axis and line between
 	// find coordinates of v1 and v2 in new coordinate system
 	// swap x components
 	// convert back to original coordinate system
 	// return new velocities
-	const lineBetween = [x2 - x1, y2 - y1];
-	const phi = Math.atan2(lineBetween[1], lineBetween[0]);
-	const v1 = [v1x, v1y];
-	const v2 = [v2x, v2y];
+	const xlineBetween = x2 - x1;
+	const ylineBetween = y2 - y1;
+	const phi = Math.atan2(xlineBetween, ylineBetween);
 	// first check to make sure that the balls are moving towards each other
 	// if they're not return early so the balls don't get stuck
-	const dotProduct = v1[0] * lineBetween[0] + v1[1] * lineBetween[1];
-	if (dotProduct < 0) {
-		return [v1[0], v1[1], v2[0], v2[1]];
+	const dotProduct = v1x * xlineBetween + v1y * ylineBetween;
+	if (dotProduct >= 0) {
+		return [v1x, v1y, v2x, v2y];
 	}
-	const v1Prime = [
-		v1[0] * Math.cos(phi) - v1[1] * Math.sin(phi),
-		v1[0] * Math.sin(phi) + v1[1] * Math.cos(phi),
-	];
-	const v2Prime = [
-		v2[0] * Math.cos(phi) - v2[1] * Math.sin(phi),
-		v2[0] * Math.sin(phi) + v2[1] * Math.cos(phi),
-	];
-	const v1PrimeSwap = [v2Prime[0], v1Prime[1]];
-	const v2PrimeSwap = [v1Prime[0], v2Prime[1]];
-	const v1Swap = [
-		v1PrimeSwap[0] * Math.cos(phi) + v1PrimeSwap[1] * Math.sin(phi),
-		-1 * v1PrimeSwap[0] * Math.sin(phi) + v1PrimeSwap[1] * Math.cos(phi),
-	];
-	const v2Swap = [
-		v2PrimeSwap[0] * Math.cos(phi) + v2PrimeSwap[1] * Math.sin(phi),
-		-1 * v2PrimeSwap[0] * Math.sin(phi) + v2PrimeSwap[1] * Math.cos(phi),
-	];
-	return [v1Swap[0], v1Swap[1], v2Swap[0], v2Swap[1]];
+	const dotProduct2 = v2x * xlineBetween + v2y * ylineBetween;
+	if (dotProduct2 <= 0) {
+		return [v1x, v1y, v2x, v2y];
+	}
+	// convert to new coordinate system and swap y components
+	const v2xPrimeSwap = v1x * Math.cos(phi) - v1y * Math.sin(phi); // v1Prime x component
+	const v1yPrimeSwap = v1x * Math.sin(phi) + v1y * Math.cos(phi); // v1Prime y component
+	const v1xPrimeSwap = v2x * Math.cos(phi) - v2y * Math.sin(phi); // v2Prime x component
+	const v2yPrimeSwap = v2x * Math.sin(phi) + v2y * Math.cos(phi); // v2Prime y component
+	// now convert back to og coordinate system
+	const v1xSwap = v1xPrimeSwap * Math.cos(phi) + v1yPrimeSwap * Math.sin(phi);
+	const v1ySwap =
+		-1 * v1xPrimeSwap * Math.sin(phi) + v1yPrimeSwap * Math.cos(phi);
+	const v2xSwap = v2xPrimeSwap * Math.cos(phi) + v2yPrimeSwap * Math.sin(phi);
+	const v2ySwap =
+		-1 * v2xPrimeSwap * Math.sin(phi) + v2yPrimeSwap * Math.cos(phi);
+	return [v1xSwap, v1ySwap, v2xSwap, v2ySwap];
 }

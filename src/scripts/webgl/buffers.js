@@ -1,10 +1,10 @@
 export default function initBuffers(gl, n) {
 	const positionBuffer = initPositionBuffer(gl, n);
-	const colorBuffer = initColorBuffer(gl);
+	// const colorBuffer = initColorBuffer(gl);
 
 	return {
 		positions: positionBuffer,
-		color: colorBuffer,
+		// color: colorBuffer,
 	};
 }
 
@@ -28,7 +28,7 @@ function initPositionBuffer(gl, n) {
 	gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
 
 	// Allocate space for the buffer without passing data
-	gl.bufferData(gl.ARRAY_BUFFER, n * 2 * 2, gl.DYNAMIC_DRAW); // n * 2 for x,y coordinates * 2 bytes per Int16
+	gl.bufferData(gl.ARRAY_BUFFER, n * 2 * 4, gl.DYNAMIC_DRAW); // n * 2 for x,y coordinates * 4 bytes per Float32
 
 	return positionBuffer;
 }
