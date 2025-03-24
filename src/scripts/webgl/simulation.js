@@ -3,6 +3,7 @@ import initGLCanvas from "src/scripts/webgl/init.js";
 import initBuffers from "src/scripts/webgl/buffers.js";
 import initShaderProgram from "src/scripts/webgl/shaders.js";
 import createAnimation from "src/scripts/webgl/animate.js";
+import RBush from 'rbush';
 
 async function importShaderSource(fileName) {
 	return await fetch(fileName).then((response) => response.text());
@@ -33,18 +34,24 @@ export default async function runSimulation(canvasId, clearColor) {
 			dotSize: gl.getUniformLocation(shaderProgram, "dotSize"),
 		},
 	};
-	let n = 20; //temp
+	let n = 500; //temp
 	const buffers = initBuffers(gl, n);
+
+	const edgeSize = 1.0;
+	const dotSize = 100.0;
 
 	// Initialize animation state
 	const state = {
 		velocities: new Float32Array(n * 2),
 		continueAnimation: true,
+		edgeSize,
+		dotSize,
+		dotRadius: Math.sqrt(dotSize / Math.PI),
 	};
 
 	// Initialize random velocities
 	for (let i = 0; i < n * 2; i++) {
-		state.velocities[i] = (Math.random() - 0.5) * 200; // Random velocity between -100 and 100
+		state.velocities[i] = Math.max(Math.random() * 2, 0.8) * 100.0 * (Math.random() < 0.5 ? -1.0 : 1.0);
 	}
 
 	// Start animation loop
@@ -59,7 +66,7 @@ export default async function runSimulation(canvasId, clearColor) {
 	);
 }
 
-function drawScene(gl, programInfo, buffers, clearColor, n) {
+function drawScene(gl, programInfo, buffers, clearColor, n, state) {
 	gl.clearColor(...clearColor);
 	gl.clear(gl.COLOR_BUFFER_BIT);
 
@@ -68,7 +75,7 @@ function drawScene(gl, programInfo, buffers, clearColor, n) {
 	// Tell WebGL to use our program when drawing
 	gl.useProgram(programInfo.program);
 
-	setResolutionUniform(gl, programInfo);
+	setResolutionUniform(gl, programInfo, state);
 
 	const offset = 0;
 	const vertexCount = n;
@@ -94,16 +101,14 @@ function setPositionAttribute(gl, buffers, programInfo) {
 	gl.enableVertexAttribArray(programInfo.attributeLocations.vertexPosition);
 }
 
-function setResolutionUniform(gl, programInfo) {
+function setResolutionUniform(gl, programInfo, state) {
 	gl.uniform2f(
 		programInfo.uniformLocations.uResolution,
 		gl.canvas.width,
 		gl.canvas.height
 	);
-	const edgeSize = 1.0;
-	gl.uniform1f(programInfo.uniformLocations.uEdgeSize, edgeSize);
-	const dotSize = 100.0;
-	gl.uniform1f(programInfo.uniformLocations.dotSize, dotSize);
+	gl.uniform1f(programInfo.uniformLocations.uEdgeSize, state.edgeSize);
+	gl.uniform1f(programInfo.uniformLocations.dotSize, state.dotSize);
 }
 
 function updateAnimationState(
@@ -120,10 +125,82 @@ function updateAnimationState(
 	gl.bindBuffer(gl.ARRAY_BUFFER, buffers.positions);
 	gl.getBufferSubData(gl.ARRAY_BUFFER, 0, positions);
 
+	const dotRadius = state.dotRadius;
+
+	const tree = new RBush(9);
+
+
 	// Update positions based on velocities
 	for (let i = 0; i < n; i++) {
 		const x = positions[i * 2];
 		const y = positions[i * 2 + 1];
+
+		// Check for collisions with canvas boundaries
+		if (
+			(x <= 0 + dotRadius && state.velocities[i * 2] < 0) ||
+			(x >= gl.canvas.width - dotRadius && state.velocities[i * 2] > 0)
+		) {
+			state.velocities[i * 2] *= -1; // Reverse x velocity
+		}
+		if (
+			(y <= 0 + dotRadius && state.velocities[i * 2 + 1] < 0) ||
+			(y >= gl.canvas.height - dotRadius && state.velocities[i * 2 + 1] > 0)
+		) {
+			state.velocities[i * 2 + 1] *= -1; // Reverse y velocity
+		}
+
+		// search tree
+		const bbox = {
+			minX: positions[i * 2] - dotRadius,
+			minY: positions[i * 2 + 1] - dotRadius,
+			maxX: positions[i * 2] + dotRadius,
+			maxY: positions[i * 2 + 1] + dotRadius
+		};
+		const collisions = tree.search(bbox);
+		if (collisions.length === 0) {
+			const item = {
+				x: positions[i * 2],
+				y: positions[i * 2 + 1],
+				index: i,
+				...bbox
+			}
+			tree.insert(item);
+		}
+		let collision = collisions.pop(); // just handling one collision at a time for now. Will need to handle the edge case later
+		// also note that weird things may happen with current setup around the walls
+		// this loop handles the fact that the bounding box checks for square overlap
+		while (collision && Math.sqrt((positions[i * 2] - positions[collision.index * 2]) ** 2 + (positions[i * 2 + 1] - positions[collision.index * 2 + 1]) ** 2) > 2 * dotRadius) {
+			collision = collisions.pop();
+			if (collision === undefined) {
+				collision = false;
+				break;
+			}
+		}
+		if (collision) {
+			const [vx1, vy1, vx2, vy2] = processCollision(
+				positions[i * 2],
+				positions[i * 2 + 1],
+				state.velocities[i * 2],
+				state.velocities[i * 2 + 1],
+				collision.x,
+				collision.y,
+				state.velocities[collision.index * 2],
+				state.velocities[collision.index * 2 + 1]
+			);
+			// undo other particles movement before applying new velocities
+			positions[collision.index * 2] -= state.velocities[collision.index * 2] * deltaTime;
+			positions[collision.index * 2 + 1] -= state.velocities[collision.index * 2 + 1] * deltaTime;
+			// update
+			state.velocities[i * 2] = vx1;
+			state.velocities[i * 2 + 1] = vy1;
+			state.velocities[collision.index * 2] = vx2;
+			state.velocities[collision.index * 2 + 1] = vy2;
+			// apply new velocities to other particle
+			positions[collision.index * 2] += state.velocities[collision.index * 2] * deltaTime;
+			positions[collision.index * 2 + 1] += state.velocities[collision.index * 2 + 1] * deltaTime;
+
+		}
+
 		const vx = state.velocities[i * 2];
 		const vy = state.velocities[i * 2 + 1];
 
@@ -131,16 +208,6 @@ function updateAnimationState(
 		positions[i * 2] = x + vx * deltaTime;
 		positions[i * 2 + 1] = y + vy * deltaTime;
 
-		// Check for collisions with canvas boundaries
-		if (positions[i * 2] < 0 || positions[i * 2] > gl.canvas.width) {
-			state.velocities[i * 2] *= -1; // Reverse x velocity
-		}
-		if (
-			positions[i * 2 + 1] < 0 ||
-			positions[i * 2 + 1] > gl.canvas.height
-		) {
-			state.velocities[i * 2 + 1] *= -1; // Reverse y velocity
-		}
 	}
 
 	// Update the buffer with new positions
@@ -148,7 +215,33 @@ function updateAnimationState(
 	gl.bufferSubData(gl.ARRAY_BUFFER, 0, positions);
 
 	// Draw the updated scene
-	drawScene(gl, programInfo, buffers, clearColor, n);
+	drawScene(gl, programInfo, buffers, clearColor, n, state);
 
 	return state;
+}
+
+function processCollision(x1, y1, v1x, v1y, x2, y2, v2x, v2y) {
+	// calculate line between
+	// calculate angle between og x axis and line between
+	// find coordinates of v1 and v2 in new coordinate system
+	// swap x components
+	// convert back to original coordinate system
+	// return new velocities
+	const lineBetween = [x2 - x1, y2 - y1];
+	const phi = Math.atan2(lineBetween[1], lineBetween[0]);
+	const v1 = [v1x, v1y];
+	const v2 = [v2x, v2y];
+	// first check to make sure that the balls are moving towards each other
+	// if they're not return early so the balls don't get stuck
+	const dotProduct = v1[0] * lineBetween[0] + v1[1] * lineBetween[1];
+	if (dotProduct < 0) {
+		return [v1[0], v1[1], v2[0], v2[1]];
+	}
+	const v1Prime = [v1[0] * Math.cos(phi) - v1[1] * Math.sin(phi), v1[0] * Math.sin(phi) + v1[1] * Math.cos(phi)];
+	const v2Prime = [v2[0] * Math.cos(phi) - v2[1] * Math.sin(phi), v2[0] * Math.sin(phi) + v2[1] * Math.cos(phi)];
+	const v1PrimeSwap = [v2Prime[0], v1Prime[1]];
+	const v2PrimeSwap = [v1Prime[0], v2Prime[1]];
+	const v1Swap = [v1PrimeSwap[0] * Math.cos(phi) + v1PrimeSwap[1] * Math.sin(phi), -1 * v1PrimeSwap[0] * Math.sin(phi) + v1PrimeSwap[1] * Math.cos(phi)];
+	const v2Swap = [v2PrimeSwap[0] * Math.cos(phi) + v2PrimeSwap[1] * Math.sin(phi), -1 * v2PrimeSwap[0] * Math.sin(phi) + v2PrimeSwap[1] * Math.cos(phi)];
+	return [v1Swap[0], v1Swap[1], v2Swap[0], v2Swap[1]];
 }
