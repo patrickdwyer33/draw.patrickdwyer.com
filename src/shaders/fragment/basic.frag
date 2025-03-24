@@ -7,10 +7,8 @@ void main() {
     if (distance > 1.0) {
         discard;
     }
-    float alpha = 1.0 - (1.0 - smoothstep(
-        vSize - 2.0,
-        vSize,
-        distance * vSize
-    ));
+    // Use a smoother falloff function for better anti-aliasing
+    float alpha = 1.0 - smoothstep(0.0, 1.0, distance);
+    alpha = pow(alpha, 2.0); // Add a slight falloff curve
     gl_FragColor = vec4(1.0, 1.0, 1.0, alpha);
 }

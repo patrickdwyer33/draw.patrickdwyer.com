@@ -20,16 +20,6 @@ function initColorBuffer(gl) {
 	return colorBuffer;
 }
 
-function generateRandomPositions(n, width, height) {
-	const positions = [];
-	for (let i = 0; i < n; i++) {
-		const x = Math.floor(Math.random() * (width + 1));
-		const y = Math.floor(Math.random() * (height + 1));
-		positions.push(x, y);
-	}
-	return positions;
-}
-
 function initPositionBuffer(gl, n) {
 	const positionBuffer = gl.createBuffer();
 
@@ -37,16 +27,8 @@ function initPositionBuffer(gl, n) {
 	// operations to from here out.
 	gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
 
-	const positions = generateRandomPositions(
-		n,
-		gl.canvas.width,
-		gl.canvas.height
-	);
-
-	// Now pass the list of positions into WebGL to build the
-	// shape. We do this by creating a Float32Array from the
-	// JavaScript array, then use it to fill the current buffer.
-	gl.bufferData(gl.ARRAY_BUFFER, new Int16Array(positions), gl.DYNAMIC_DRAW);
+	// Allocate space for the buffer without passing data
+	gl.bufferData(gl.ARRAY_BUFFER, n * 2 * 2, gl.DYNAMIC_DRAW); // n * 2 for x,y coordinates * 2 bytes per Int16
 
 	return positionBuffer;
 }
