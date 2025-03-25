@@ -34,11 +34,11 @@ export default async function runSimulation(canvasId, clearColor) {
 			dotSize: gl.getUniformLocation(shaderProgram, "dotSize"),
 		},
 	};
-	let n = 40; //temp
+	let n = 10; //temp
 	const buffers = initBuffers(gl, n);
 
 	const edgeSize = 1.0;
-	const dotSize = 10.0;
+	const dotSize = 100.0;
 
 	// Initialize animation state
 	const state = {
@@ -151,111 +151,100 @@ function updateAnimationState(
 ) {
 	const dotRadius = state.dotSize / 2;
 
-	const tree = new RBush(9);
+	const bboxes = [];
 
 	// Update positions based on velocities
 	for (let i = 0; i < n; i++) {
-		const x = state.positions[i * 2];
-		const y = state.positions[i * 2 + 1];
+		const xIndexOffset = i * 2;
+		const yIndexOffset = xIndexOffset + 1;
+		const x = state.positions[xIndexOffset];
+		const y = state.positions[yIndexOffset];
+		const vx = state.velocities[xIndexOffset];
+		const vy = state.velocities[yIndexOffset];
 
 		// Check for collisions with canvas boundaries
 		if (
-			(x <= 0 + dotRadius && state.velocities[i * 2] < 0) ||
-			(x >= gl.canvas.width - dotRadius && state.velocities[i * 2] > 0)
+			(x <= 0 + dotRadius && vx < 0) ||
+			(x >= gl.canvas.width - dotRadius && vx > 0)
 		) {
-			state.velocities[i * 2] *= -1; // Reverse x velocity
+			state.velocities[xIndexOffset] *= -1; // Reverse x velocity
 		}
 		if (
-			(y <= 0 + dotRadius && state.velocities[i * 2 + 1] < 0) ||
-			(y >= gl.canvas.height - dotRadius &&
-				state.velocities[i * 2 + 1] > 0)
+			(y <= 0 + dotRadius && vy < 0) ||
+			(y >= gl.canvas.height - dotRadius && vy > 0)
 		) {
-			state.velocities[i * 2 + 1] *= -1; // Reverse y velocity
+			state.velocities[yIndexOffset] *= -1; // Reverse y velocity
 		}
 
-		// search tree
 		const bbox = {
-			minX: state.positions[i * 2] - dotRadius + 1.0,
-			minY: state.positions[i * 2 + 1] - dotRadius + 1.0,
-			maxX: state.positions[i * 2] + dotRadius + 1.0,
-			maxY: state.positions[i * 2 + 1] + dotRadius + 1.0,
+			minX: x - dotRadius,
+			minY: y - dotRadius,
+			maxX: x + dotRadius,
+			maxY: y + dotRadius,
+			x,
+			y,
+			index: i,
 		};
-		const collisions = tree.search(bbox);
-		if (collisions.length === 0) {
-			const item = {
-				x: state.positions[i * 2],
-				y: state.positions[i * 2 + 1],
-				index: i,
-				...bbox,
-			};
-			tree.insert(item);
+		bboxes.push(bbox);
+	}
+
+	const tree = new RBush(9);
+	tree.load(bboxes);
+	const foundCollisionIds = new Set();
+	for (let i = 0; i < n; i++) {
+		if (foundCollisionIds.has(i)) {
+			continue;
 		}
+		const bbox = bboxes[i];
+		const collisions = tree.search(bbox);
 		let collision = collisions.pop(); // just handling one collision at a time for now. Will need to handle the edge case later
 		// also note that weird things may happen with current setup around the walls
 		// this loop handles the fact that the bounding box checks for square overlap
-		if (!collision) {
-			const vx = state.velocities[i * 2];
-			const vy = state.velocities[i * 2 + 1];
-
-			// Update position
-			state.positions[i * 2] = x + vx * deltaTime;
-			state.positions[i * 2 + 1] = y + vy * deltaTime;
-
-			continue;
-		}
-
+		if (!collision) continue;
 		while (
-			positionsArrayDistSquared(state.positions, i, collision.index) >
-			state.dotSize ** 2 // same radius so we can just use diameter for collision detection
+			collision.index == i
+			// collision.index == i ||
+			// positionsArrayDistSquared(state.positions, i, collision.index) >
+			// 	state.dotSize ** 2 // same radius so we can just use diameter for collision detection
 		) {
 			collision = collisions.pop();
 			if (collision === undefined) {
-				collision = tree.search(bbox)[0];
-				console.log(
-					state.positions[i * 2],
-					state.positions[i * 2 + 1],
-					state.positions[collision.index * 2],
-					state.positions[collision.index * 2 + 1]
-				);
 				collision = false;
 				break;
 			}
 		}
-		if (collision) {
-			// get updated velocities after collision
-			const [vx1, vy1, vx2, vy2] = processCollision(
-				state.positions[i * 2],
-				state.positions[i * 2 + 1],
-				state.velocities[i * 2],
-				state.velocities[i * 2 + 1],
-				collision.x,
-				collision.y,
-				state.velocities[collision.index * 2],
-				state.velocities[collision.index * 2 + 1]
-			);
-			// undo other particles movement before making checks
-			state.positions[collision.index * 2] -=
-				state.velocities[collision.index * 2] * deltaTime;
-			state.positions[collision.index * 2 + 1] -=
-				state.velocities[collision.index * 2 + 1] * deltaTime;
-			// update
-			state.velocities[i * 2] = vx1;
-			state.velocities[i * 2 + 1] = vy1;
-			state.velocities[collision.index * 2] = vx2;
-			state.velocities[collision.index * 2 + 1] = vy2;
-			// apply new velocities to other particle
-			state.positions[collision.index * 2] +=
-				state.velocities[collision.index * 2] * deltaTime;
-			state.positions[collision.index * 2 + 1] +=
-				state.velocities[collision.index * 2 + 1] * deltaTime;
-		}
+		if (!collision) continue;
+		foundCollisionIds.add(collision.index);
+		const xIndexOffset = i * 2;
+		const yIndexOffset = xIndexOffset + 1;
+		const xIndexOffsetCollision = collision.index * 2;
+		const yIndexOffsetCollision = collision.index * 2 + 1;
+		// get updated velocities after collision
+		const [vx1, vy1, vx2, vy2] = processCollision(
+			state.positions[xIndexOffset],
+			state.positions[yIndexOffset],
+			state.velocities[xIndexOffset],
+			state.velocities[yIndexOffset],
+			collision.x,
+			collision.y,
+			state.velocities[xIndexOffsetCollision],
+			state.velocities[yIndexOffsetCollision]
+		);
+		// update
+		state.velocities[xIndexOffset] = vx1;
+		state.velocities[yIndexOffset] = vy1;
+		state.velocities[xIndexOffsetCollision] = vx2;
+		state.velocities[yIndexOffsetCollision] = vy2;
+	}
 
-		const vx = state.velocities[i * 2];
-		const vy = state.velocities[i * 2 + 1];
-
+	for (let i = 0; i < n; i++) {
 		// Update position
-		state.positions[i * 2] = x + vx * deltaTime;
-		state.positions[i * 2 + 1] = y + vy * deltaTime;
+		const xIndexOffset = i * 2;
+		const yIndexOffset = xIndexOffset + 1;
+		state.positions[xIndexOffset] +=
+			state.velocities[xIndexOffset] * deltaTime;
+		state.positions[yIndexOffset] +=
+			state.velocities[yIndexOffset] * deltaTime;
 	}
 
 	// Update the buffer with new positions
@@ -281,13 +270,15 @@ function processCollision(x1, y1, v1x, v1y, x2, y2, v2x, v2y) {
 	// first check to make sure that the balls are moving towards each other
 	// if they're not return early so the balls don't get stuck
 	const dotProduct = v1x * xlineBetween + v1y * ylineBetween;
-	if (dotProduct >= 0) {
-		return [v1x, v1y, v2x, v2y];
-	}
 	const dotProduct2 = v2x * xlineBetween + v2y * ylineBetween;
-	if (dotProduct2 <= 0) {
+	console.log("TRYING TO COLLIDE");
+	if (dotProduct > 0 && dotProduct2 < 0) {
+		console.log(dotProduct);
+		console.log(dotProduct2);
 		return [v1x, v1y, v2x, v2y];
 	}
+	console.log("SWITCHING");
+	console.log([v1x, v1y, v2x, v2y]);
 	// convert to new coordinate system and swap y components
 	const v2xPrimeSwap = v1x * Math.cos(phi) - v1y * Math.sin(phi); // v1Prime x component
 	const v1yPrimeSwap = v1x * Math.sin(phi) + v1y * Math.cos(phi); // v1Prime y component
@@ -300,5 +291,7 @@ function processCollision(x1, y1, v1x, v1y, x2, y2, v2x, v2y) {
 	const v2xSwap = v2xPrimeSwap * Math.cos(phi) + v2yPrimeSwap * Math.sin(phi);
 	const v2ySwap =
 		-1 * v2xPrimeSwap * Math.sin(phi) + v2yPrimeSwap * Math.cos(phi);
+	console.log([v1xSwap, v1ySwap, v2xSwap, v2ySwap]);
+	console.log("END SWITCHING");
 	return [v1xSwap, v1ySwap, v2xSwap, v2ySwap];
 }
