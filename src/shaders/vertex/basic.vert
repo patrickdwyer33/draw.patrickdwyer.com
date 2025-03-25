@@ -13,7 +13,7 @@ uniform float dotSize;
     vec2 zeroToTwo = zeroToOne * 2.0;
  
     // convert from 0->2 to -1->+1 (clip space)
-    vec2 clipSpace = zeroToTwo - 1.0;
+    vec2 clipSpace = vec2(zeroToTwo.x - 1.0, -(zeroToTwo.y - 1.0));
  
     gl_Position = vec4(clipSpace, 0, 1);
     

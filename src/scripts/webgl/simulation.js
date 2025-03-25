@@ -218,8 +218,9 @@ function updateAnimationState(
 		const xIndexOffset = i * 2;
 		const yIndexOffset = xIndexOffset + 1;
 		const xIndexOffsetCollision = collision.index * 2;
-		const yIndexOffsetCollision = collision.index * 2 + 1;
+		const yIndexOffsetCollision = xIndexOffsetCollision + 1;
 		// get updated velocities after collision
+		console.log(i);
 		const [vx1, vy1, vx2, vy2] = processCollision(
 			state.positions[xIndexOffset],
 			state.positions[yIndexOffset],
@@ -264,33 +265,42 @@ function processCollision(x1, y1, v1x, v1y, x2, y2, v2x, v2y) {
 	// swap x components
 	// convert back to original coordinate system
 	// return new velocities
-	const xlineBetween = x2 - x1;
-	const ylineBetween = y2 - y1;
-	const phi = Math.atan2(xlineBetween, ylineBetween);
+	const xlineBetween = x1 - x2;
+	const ylineBetween = y1 - y2;
+	const phi = Math.atan2(ylineBetween, xlineBetween);
 	// first check to make sure that the balls are moving towards each other
 	// if they're not return early so the balls don't get stuck
-	const dotProduct = v1x * xlineBetween + v1y * ylineBetween;
-	const dotProduct2 = v2x * xlineBetween + v2y * ylineBetween;
+	const dotProductv1 = v1x * xlineBetween + v1y * ylineBetween;
+	const dotProductv2 = v2x * xlineBetween + v2y * ylineBetween;
 	console.log("TRYING TO COLLIDE");
-	if (dotProduct > 0 && dotProduct2 < 0) {
-		console.log(dotProduct);
-		console.log(dotProduct2);
+	// p1 heading toward p2 if v1 in opposite direction of lineBetween
+	// p2 heading towards p1 if v2 in direction of lineBetween
+	if (dotProductv1 > 0 && dotProductv2 < 0) {
+		console.log(x1, y1);
+		console.log(x2, y2);
+		console.log(dotProductv1);
+		console.log(dotProductv2);
+		console.log(v1x, v1y);
+		console.log(v2x, v2y);
 		return [v1x, v1y, v2x, v2y];
 	}
 	console.log("SWITCHING");
 	console.log([v1x, v1y, v2x, v2y]);
-	// convert to new coordinate system and swap y components
-	const v2xPrimeSwap = v1x * Math.cos(phi) - v1y * Math.sin(phi); // v1Prime x component
-	const v1yPrimeSwap = v1x * Math.sin(phi) + v1y * Math.cos(phi); // v1Prime y component
-	const v1xPrimeSwap = v2x * Math.cos(phi) - v2y * Math.sin(phi); // v2Prime x component
-	const v2yPrimeSwap = v2x * Math.sin(phi) + v2y * Math.cos(phi); // v2Prime y component
-	// now convert back to og coordinate system
-	const v1xSwap = v1xPrimeSwap * Math.cos(phi) + v1yPrimeSwap * Math.sin(phi);
-	const v1ySwap =
-		-1 * v1xPrimeSwap * Math.sin(phi) + v1yPrimeSwap * Math.cos(phi);
-	const v2xSwap = v2xPrimeSwap * Math.cos(phi) + v2yPrimeSwap * Math.sin(phi);
-	const v2ySwap =
-		-1 * v2xPrimeSwap * Math.sin(phi) + v2yPrimeSwap * Math.cos(phi);
+	// convert to new coordinate system and swap components
+	const v1xPrime = v1x * Math.cos(phi) - v1y * Math.sin(phi); // v1 x in rotated frame
+	const v1yPrime = v1x * Math.sin(phi) + v1y * Math.cos(phi); // v1 y in rotated frame
+	const v2xPrime = v2x * Math.cos(phi) - v2y * Math.sin(phi); // v2 x in rotated frame
+	const v2yPrime = v2x * Math.sin(phi) + v2y * Math.cos(phi); // v2 y in rotated frame
+
+	// Swap x components (parallel to collision line)
+	const v1xPrimeSwapped = v2xPrime;
+	const v2xPrimeSwapped = v1xPrime;
+
+	// Convert back to original coordinate system
+	const v1xSwap = v1xPrimeSwapped * Math.cos(phi) + v1yPrime * Math.sin(phi);
+	const v1ySwap = -v1xPrimeSwapped * Math.sin(phi) + v1yPrime * Math.cos(phi);
+	const v2xSwap = v2xPrimeSwapped * Math.cos(phi) + v2yPrime * Math.sin(phi);
+	const v2ySwap = -v2xPrimeSwapped * Math.sin(phi) + v2yPrime * Math.cos(phi);
 	console.log([v1xSwap, v1ySwap, v2xSwap, v2ySwap]);
 	console.log("END SWITCHING");
 	return [v1xSwap, v1ySwap, v2xSwap, v2ySwap];
