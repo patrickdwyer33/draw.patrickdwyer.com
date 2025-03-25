@@ -38,7 +38,7 @@ export default async function runSimulation(canvasId, clearColor) {
 	const buffers = initBuffers(gl, n);
 
 	const edgeSize = 1.0;
-	const dotSize = 100.0;
+	const dotSize = 50.0;
 
 	// Initialize animation state
 	const state = {
@@ -80,7 +80,7 @@ function generateRandomVelocities(n) {
 	for (let i = 0; i < n * 2; i++) {
 		let velocity =
 			Math.max(Math.random(), 0.4) *
-			10.0 *
+			100.0 *
 			(Math.random() < 0.5 ? -1.0 : 1.0);
 		velocities.push(velocity);
 	}
@@ -202,10 +202,9 @@ function updateAnimationState(
 		// this loop handles the fact that the bounding box checks for square overlap
 		if (!collision) continue;
 		while (
-			collision.index == i
-			// collision.index == i ||
-			// positionsArrayDistSquared(state.positions, i, collision.index) >
-			// 	state.dotSize ** 2 // same radius so we can just use diameter for collision detection
+			collision.index == i ||
+			positionsArrayDistSquared(state.positions, i, collision.index) >
+				state.dotSize ** 2 // same radius so we can just use diameter for collision detection
 		) {
 			collision = collisions.pop();
 			if (collision === undefined) {
@@ -220,7 +219,6 @@ function updateAnimationState(
 		const xIndexOffsetCollision = collision.index * 2;
 		const yIndexOffsetCollision = xIndexOffsetCollision + 1;
 		// get updated velocities after collision
-		console.log(i);
 		const [vx1, vy1, vx2, vy2] = processCollision(
 			state.positions[xIndexOffset],
 			state.positions[yIndexOffset],
@@ -272,36 +270,25 @@ function processCollision(x1, y1, v1x, v1y, x2, y2, v2x, v2y) {
 	// if they're not return early so the balls don't get stuck
 	const dotProductv1 = v1x * xlineBetween + v1y * ylineBetween;
 	const dotProductv2 = v2x * xlineBetween + v2y * ylineBetween;
-	console.log("TRYING TO COLLIDE");
 	// p1 heading toward p2 if v1 in opposite direction of lineBetween
 	// p2 heading towards p1 if v2 in direction of lineBetween
 	if (dotProductv1 > 0 && dotProductv2 < 0) {
-		console.log(x1, y1);
-		console.log(x2, y2);
-		console.log(dotProductv1);
-		console.log(dotProductv2);
-		console.log(v1x, v1y);
-		console.log(v2x, v2y);
 		return [v1x, v1y, v2x, v2y];
 	}
-	console.log("SWITCHING");
-	console.log([v1x, v1y, v2x, v2y]);
 	// convert to new coordinate system and swap components
-	const v1xPrime = v1x * Math.cos(phi) - v1y * Math.sin(phi); // v1 x in rotated frame
-	const v1yPrime = v1x * Math.sin(phi) + v1y * Math.cos(phi); // v1 y in rotated frame
-	const v2xPrime = v2x * Math.cos(phi) - v2y * Math.sin(phi); // v2 x in rotated frame
-	const v2yPrime = v2x * Math.sin(phi) + v2y * Math.cos(phi); // v2 y in rotated frame
+	const v1xPrime = v1x * Math.cos(phi) + v1y * Math.sin(phi); // v1 x in rotated frame
+	const v1yPrime = -v1x * Math.sin(phi) + v1y * Math.cos(phi); // v1 y in rotated frame
+	const v2xPrime = v2x * Math.cos(phi) + v2y * Math.sin(phi); // v2 x in rotated frame
+	const v2yPrime = -v2x * Math.sin(phi) + v2y * Math.cos(phi); // v2 y in rotated frame
 
 	// Swap x components (parallel to collision line)
 	const v1xPrimeSwapped = v2xPrime;
 	const v2xPrimeSwapped = v1xPrime;
 
 	// Convert back to original coordinate system
-	const v1xSwap = v1xPrimeSwapped * Math.cos(phi) + v1yPrime * Math.sin(phi);
-	const v1ySwap = -v1xPrimeSwapped * Math.sin(phi) + v1yPrime * Math.cos(phi);
-	const v2xSwap = v2xPrimeSwapped * Math.cos(phi) + v2yPrime * Math.sin(phi);
-	const v2ySwap = -v2xPrimeSwapped * Math.sin(phi) + v2yPrime * Math.cos(phi);
-	console.log([v1xSwap, v1ySwap, v2xSwap, v2ySwap]);
-	console.log("END SWITCHING");
+	const v1xSwap = v1xPrimeSwapped * Math.cos(phi) - v1yPrime * Math.sin(phi);
+	const v1ySwap = v1xPrimeSwapped * Math.sin(phi) + v1yPrime * Math.cos(phi);
+	const v2xSwap = v2xPrimeSwapped * Math.cos(phi) - v2yPrime * Math.sin(phi);
+	const v2ySwap = v2xPrimeSwapped * Math.sin(phi) + v2yPrime * Math.cos(phi);
 	return [v1xSwap, v1ySwap, v2xSwap, v2ySwap];
 }
