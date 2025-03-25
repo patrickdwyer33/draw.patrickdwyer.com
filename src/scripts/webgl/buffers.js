@@ -1,21 +1,19 @@
-export default function initBuffers(gl, n) {
+export default function initBuffers(gl, n, colors) {
 	const positionBuffer = initPositionBuffer(gl, n);
-	// const colorBuffer = initColorBuffer(gl);
+	const colorBuffer = initColorBuffer(gl, colors);
 
 	return {
 		positions: positionBuffer,
-		// color: colorBuffer,
+		colors: colorBuffer,
 	};
 }
 
-function initColorBuffer(gl) {
+function initColorBuffer(gl, colors) {
 	const colorBuffer = gl.createBuffer();
 
 	gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
 
-	const sizes = [10.0, 10.0, 10.0, 10.0, 10.0];
-
-	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(sizes), gl.STATIC_DRAW);
+	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(colors), gl.STATIC_DRAW);
 
 	return colorBuffer;
 }

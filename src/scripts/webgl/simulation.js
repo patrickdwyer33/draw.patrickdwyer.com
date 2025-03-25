@@ -3,6 +3,7 @@ import initGLCanvas from "src/scripts/webgl/init.js";
 import initBuffers from "src/scripts/webgl/buffers.js";
 import initShaderProgram from "src/scripts/webgl/shaders.js";
 import createAnimation from "src/scripts/webgl/animate.js";
+import { getDrawingInfoFromURL } from "src/scripts/drawing.js";
 import RBush from "rbush";
 
 async function importShaderSource(fileName) {
@@ -27,6 +28,7 @@ export default async function runSimulation(canvasId, clearColor) {
 		program: shaderProgram,
 		attributeLocations: {
 			vertexPosition: gl.getAttribLocation(shaderProgram, "aPosition"),
+			vertexColor: gl.getAttribLocation(shaderProgram, "aColor"),
 		},
 		uniformLocations: {
 			uResolution: gl.getUniformLocation(shaderProgram, "uResolution"),
@@ -34,11 +36,12 @@ export default async function runSimulation(canvasId, clearColor) {
 			dotSize: gl.getUniformLocation(shaderProgram, "dotSize"),
 		},
 	};
-	let n = 200; //temp
-	const buffers = initBuffers(gl, n);
+	const { finalPositions, colors } = getDrawingInfoFromURL();
+	let n = colors.length / 4; // colors are flat and rgba
+	const buffers = initBuffers(gl, n, colors);
 
 	const edgeSize = 1.0;
-	const dotSize = 50.0;
+	const dotSize = 4.0;
 
 	// Initialize animation state
 	const state = {
@@ -142,6 +145,21 @@ function setPositionAttribute(gl, buffers, programInfo) {
 		offset
 	);
 	gl.enableVertexAttribArray(programInfo.attributeLocations.vertexPosition);
+	numComponents = 4;
+	type = gl.FLOAT;
+	normalize = false;
+	stride = 0;
+	offset = 0;
+	gl.bindBuffer(gl.ARRAY_BUFFER, buffers.colors);
+	gl.vertexAttribPointer(
+		programInfo.attributeLocations.vertexColor,
+		numComponents,
+		type,
+		normalize,
+		stride,
+		offset
+	);
+	gl.enableVertexAttribArray(programInfo.attributeLocations.vertexColor);
 }
 
 function setResolutionUniform(gl, programInfo, state) {

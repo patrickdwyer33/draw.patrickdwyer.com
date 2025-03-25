@@ -1,8 +1,11 @@
 attribute vec2 aPosition;
+attribute vec4 aColor;
 
 uniform vec2 uResolution;
 
 uniform float dotSize;
+
+varying vec4 vColor;
  
 // all shaders have a main function
   void main() {
@@ -18,4 +21,6 @@ uniform float dotSize;
     gl_Position = vec4(clipSpace, 0, 1);
     
     gl_PointSize = dotSize;
+    
+    vColor = aColor;
   }
