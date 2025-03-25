@@ -34,7 +34,7 @@ export default async function runSimulation(canvasId, clearColor) {
 			dotSize: gl.getUniformLocation(shaderProgram, "dotSize"),
 		},
 	};
-	let n = 10; //temp
+	let n = 200; //temp
 	const buffers = initBuffers(gl, n);
 
 	const edgeSize = 1.0;
@@ -45,7 +45,8 @@ export default async function runSimulation(canvasId, clearColor) {
 		positions: generateRandomPositions(
 			n,
 			gl.canvas.width,
-			gl.canvas.height
+			gl.canvas.height,
+			dotSize
 		),
 		velocities: generateRandomVelocities(n),
 		continueAnimation: true,
@@ -65,12 +66,33 @@ export default async function runSimulation(canvasId, clearColor) {
 	);
 }
 
-function generateRandomPositions(n, width, height) {
+function generateRandomPositions(n, width, height, dotDiameter) {
+	const dotRadius = dotDiameter / 2;
 	const positions = [];
-	for (let i = 0; i < n; i++) {
-		const x = Math.random() * width;
-		const y = Math.random() * height;
+	const tree = new RBush(16);
+	let failedAttempts = 0;
+	const maxFailedAttempts = 1000;
+	for (let i = 0; i - failedAttempts < n; i++) {
+		if (failedAttempts > maxFailedAttempts) {
+			throw new Error(
+				"Failed to generate random positions, too many failed attempts"
+			);
+		}
+		const x = Math.random() * (width - dotDiameter) + dotRadius;
+		const y = Math.random() * (height - dotDiameter) + dotRadius;
+		const bbox = {
+			minX: x - dotRadius,
+			minY: y - dotRadius,
+			maxX: x + dotRadius,
+			maxY: y + dotRadius,
+		};
+		const collision = tree.collides(bbox); // note that this is a collision check for a square, not a circle. Might want to change this later
+		if (collision) {
+			failedAttempts++;
+			continue;
+		}
 		positions.push(x, y);
+		tree.insert(bbox);
 	}
 	return positions;
 }
