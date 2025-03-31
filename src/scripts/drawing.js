@@ -71,6 +71,12 @@ const createDrawingHandlers = (state, canvas) => ({
 			state.ctx.strokeStyle = state.color;
 		}
 	},
+
+	handleSubmit: () => {
+		const drawingInfo = getDrawingInfoFromCanvas(state, canvas);
+		const url = createDrawingURL(drawingInfo);
+		window.location.href = url;
+	},
 });
 
 // Canvas setup
@@ -120,6 +126,10 @@ export default function setupUserDrawing(document, canvasId) {
 	// Set initial active tool
 	document.querySelector("#pencil-button").classList.add("active");
 
+	document
+		.querySelector("#submit-button")
+		.addEventListener("click", handlers.handleSubmit);
+
 	return { state, handlers };
 }
 
@@ -142,8 +152,10 @@ function getDrawingInfoFromCanvas(state, canvas) {
 		const b = data[i + 2];
 		const a = data[i + 3];
 
-		// Skip white pixels (255, 255, 255) and fully transparent pixels
-		if (r === 255 && g === 255 && b === 255) continue;
+		console.log(r, g, b, a);
+
+		// Skip black pixels (0, 0, 0) and fully transparent pixels
+		if (r === 0 && g === 0 && b === 0) continue;
 		if (a === 0) continue;
 
 		// Calculate x and y coordinates
@@ -159,11 +171,9 @@ function getDrawingInfoFromCanvas(state, canvas) {
 	return { finalPositions, colors };
 }
 
-const drawingInfoParamName = "drawingInfo";
-
 export function getDrawingInfoFromURL() {
 	const url = new URL(window.location.href);
-	const drawingInfoParam = url.searchParams.get(drawingInfoParamName);
+	const drawingInfoParam = url.searchParams.get("drawingInfo");
 
 	// If no drawing info in URL, generate default data
 	if (!drawingInfoParam) {
@@ -199,11 +209,11 @@ export function createDrawingURL(drawingInfo) {
 	});
 
 	// Create the base URL
-	const baseURL = "https://patrickdwyer.com/simulate";
+	const baseURL = `${window.location.origin}/simulate`;
 
 	// Create URL object and add the drawing info as a query parameter
 	const url = new URL(baseURL);
-	url.searchParams.set(drawingInfoParamName, drawingData);
+	url.searchParams.set("drawingInfo", drawingData);
 
 	return url.toString();
 }
