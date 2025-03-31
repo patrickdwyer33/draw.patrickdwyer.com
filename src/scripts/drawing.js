@@ -5,6 +5,8 @@ export const createDrawingCanvasContext = (canvas, devicePixelRatio) => {
 	ctx.scale(devicePixelRatio, devicePixelRatio);
 	ctx.lineCap = "round";
 	ctx.lineJoin = "round";
+	ctx.fillStyle = "black";
+	ctx.fillRect(0, 0, canvas.width, canvas.height);
 	return ctx;
 };
 
@@ -22,14 +24,14 @@ const drawLine = (ctx, startX, startY, endX, endY) => {
 };
 
 const clearCanvas = (ctx, width, height) => {
-	ctx.clearRect(0, 0, width, height);
+	ctx.fillRect(0, 0, width, height);
 };
 
 // Drawing state management
 const createDrawingState = () => ({
 	isDrawing: false,
 	currentTool: "pencil",
-	color: "#000000",
+	color: "#ffffff",
 	lineWidth: 2,
 	lastX: 0,
 	lastY: 0,
@@ -54,8 +56,9 @@ const createDrawingHandlers = (state, canvas) => ({
 	},
 
 	handleToolChange: (e) => {
+		console.log(e.target?.id);
 		state.ctx.strokeStyle =
-			e.target?.id === "eraser" ? "#ffffff" : state.color;
+			e.target?.id === "eraser-button" ? "#000000" : state.color;
 	},
 
 	handleClear: () => {
@@ -120,60 +123,58 @@ export default function setupUserDrawing(document, canvasId) {
 	return { state, handlers };
 }
 
+function getDrawingInfoFromCanvas(state, canvas) {
+	const finalPositions = [];
+	const colors = [];
+
+	// Get the canvas's display size (not the internal size)
+	const displayWidth = canvas.clientWidth;
+	const displayHeight = canvas.clientHeight;
+
+	// Get the image data from the canvas
+	const imageData = state.ctx.getImageData(0, 0, displayWidth, displayHeight);
+	const data = imageData.data;
+
+	// Process each pixel
+	for (let i = 0; i < data.length; i += 4) {
+		const r = data[i];
+		const g = data[i + 1];
+		const b = data[i + 2];
+		const a = data[i + 3];
+
+		// Skip white pixels (255, 255, 255) and fully transparent pixels
+		if (r === 255 && g === 255 && b === 255) continue;
+		if (a === 0) continue;
+
+		// Calculate x and y coordinates
+		const pixelIndex = i / 4;
+		const x = (pixelIndex % displayWidth) / displayWidth;
+		const y = Math.floor(pixelIndex / displayWidth) / displayHeight;
+
+		// Add position and color data
+		finalPositions.push(x, y);
+		colors.push(r / 255, g / 255, b / 255, a / 255);
+	}
+
+	return { finalPositions, colors };
+}
+
+const drawingInfoParamName = "drawingInfo";
+
 export function getDrawingInfoFromURL() {
 	const url = new URL(window.location.href);
-	const drawingInfoParam = url.searchParams.get("drawingInfo");
+	const drawingInfoParam = url.searchParams.get(drawingInfoParamName);
 
-	// If no drawing info in URL, generate random data
+	// If no drawing info in URL, generate default data
 	if (!drawingInfoParam) {
 		const n = 5000;
 		return getDefaultDrawingData(n);
 	}
 
-	// Decode base64 data
-	const binaryData = atob(drawingInfoParam);
-	const buffer = new Uint8Array(binaryData.length);
-
-	// Convert binary string to Uint8Array
-	for (let i = 0; i < binaryData.length; i++) {
-		buffer[i] = binaryData.charCodeAt(i);
-	}
-
-	// Read data from buffer
-	// First 4 bytes: number of points (n)
-	const dataView = new DataView(buffer.buffer);
-	const n = dataView.getUint32(0, true); // true = little endian
-
-	// Prepare arrays
-	const finalPositions = new Float32Array(n * 2);
-	const colors = new Float32Array(n * 4);
-
-	// Extract position data (n*2 float32 values)
-	const posOffset = 4; // Start after the n value
-	for (let i = 0; i < n * 2; i++) {
-		finalPositions[i] = dataView.getFloat32(posOffset + i * 4, true);
-	}
-
-	// Extract color data (n*4 float32 values)
-	const colorOffset = posOffset + n * 2 * 4;
-	for (let i = 0; i < n * 4; i++) {
-		colors[i] = dataView.getFloat32(colorOffset + i * 4, true);
-	}
-
-	// Validate data length
-	if (finalPositions.length !== n * 2 || colors.length !== n * 4) {
-		throw new Error(
-			"Invalid array lengths: finalPositions must be n*2 and colors must be n*4"
-		);
-	}
-
-	return {
-		finalPositions: Array.from(finalPositions),
-		colors: Array.from(colors),
-	};
+	return JSON.parse(drawingInfoParam);
 }
 
-// Helper function for generating random drawing data
+// Helper function for generating default drawing data
 function getDefaultDrawingData(n) {
 	const finalPositions = [];
 	const colors = [];
@@ -190,48 +191,19 @@ function getDefaultDrawingData(n) {
 	return { finalPositions, colors };
 }
 
-// Helper function to encode drawing data for URL
-function encodeDrawingDataForURL(n, finalPositions, colors) {
-	// Validate input arrays
-	if (finalPositions.length !== n * 2 || colors.length !== n * 4) {
-		throw new Error(
-			"Invalid array lengths: finalPositions must be n*2 and colors must be n*4"
-		);
-	}
+export function createDrawingURL(drawingInfo) {
+	// Convert the drawing info to a JSON string
+	const drawingData = JSON.stringify({
+		finalPositions: drawingInfo.finalPositions,
+		colors: drawingInfo.colors,
+	});
 
-	// Create buffer with enough space
-	const bufferSize = 4 + n * 2 * 4 + n * 4 * 4; // 4 bytes for n + float32 for positions and colors
-	const buffer = new ArrayBuffer(bufferSize);
-	const dataView = new DataView(buffer);
+	// Create the base URL
+	const baseURL = "https://patrickdwyer.com/simulate";
 
-	// Write number of points
-	dataView.setUint32(0, n, true);
+	// Create URL object and add the drawing info as a query parameter
+	const url = new URL(baseURL);
+	url.searchParams.set(drawingInfoParamName, drawingData);
 
-	// Write position data
-	const posOffset = 4;
-	for (let i = 0; i < n * 2; i++) {
-		dataView.setFloat32(posOffset + i * 4, finalPositions[i], true);
-	}
-
-	// Write color data
-	const colorOffset = posOffset + n * 2 * 4;
-	for (let i = 0; i < n * 4; i++) {
-		dataView.setFloat32(colorOffset + i * 4, colors[i], true);
-	}
-
-	// Convert to base64 (URL safe)
-	const bytes = new Uint8Array(buffer);
-
-	// Encoding the bytes to Base64
-	let base64;
-	const chunkSize = 0xffff;
-	let binary = "";
-	for (let i = 0; i < bytes.length; i += chunkSize) {
-		const slice = bytes.subarray(i, Math.min(i + chunkSize, bytes.length));
-		binary += String.fromCharCode.apply(null, slice);
-	}
-	base64 = window.btoa(binary);
-
-	// Make URL safe
-	return base64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+	return url.toString();
 }
