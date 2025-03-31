@@ -3,8 +3,7 @@ import { pipe } from "src/scripts/utils/fp.js";
 export const createDrawingCanvasContext = (canvas, devicePixelRatio) => {
 	const ctx = canvas.getContext("2d");
 	ctx.scale(devicePixelRatio, devicePixelRatio);
-	ctx.lineCap = "round";
-	ctx.lineJoin = "round";
+	ctx.imageSmoothingEnabled = false;
 	ctx.fillStyle = "black";
 	ctx.fillRect(0, 0, canvas.width, canvas.height);
 	return ctx;
@@ -152,10 +151,9 @@ function getDrawingInfoFromCanvas(state, canvas) {
 		const b = data[i + 2];
 		const a = data[i + 3];
 
-		console.log(r, g, b, a);
-
 		// Skip black pixels (0, 0, 0) and fully transparent pixels
-		if (r === 0 && g === 0 && b === 0) continue;
+		// TODO: This is a hack to get rid of the black pixels, there may be some rounding errors
+		if (r <= 1 && g <= 1 && b <= 1) continue;
 		if (a === 0) continue;
 
 		// Calculate x and y coordinates
