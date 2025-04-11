@@ -36,7 +36,7 @@ export default async function runSimulation(canvasId, clearColor) {
 			dotSize: gl.getUniformLocation(shaderProgram, "dotSize"),
 		},
 	};
-	const { finalPositions, colors } = getDrawingInfoFromURL();
+	const colors = getDrawingInfoFromURL(gl.canvas);
 	let n = colors.length / 4; // colors are flat and rgba
 	const buffers = initBuffers(gl, n, colors);
 

@@ -99,7 +99,7 @@ export default function setupUserDrawing(document, canvasId) {
 	const state = createDrawingState(canvas);
 	state.ctx = pipe(createDrawingCanvasContext, (ctx) =>
 		setDrawingStyle(ctx, { color: state.color, lineWidth: state.lineWidth })
-	)(canvas, dpr);
+	)(ctx, dpr);
 
 	const handlers = createDrawingHandlers(state, canvas);
 
@@ -133,7 +133,6 @@ export default function setupUserDrawing(document, canvasId) {
 }
 
 function getDrawingInfoFromCanvas(state, canvas) {
-	const finalPositions = [];
 	const colors = [];
 
 	// Get the canvas's display size (not the internal size)
@@ -151,44 +150,35 @@ function getDrawingInfoFromCanvas(state, canvas) {
 		const b = data[i + 2];
 		const a = data[i + 3];
 
-		// Skip black pixels (0, 0, 0) and fully transparent pixels
-		// TODO: This is a hack to get rid of the black pixels, there may be some rounding errors
-		if (r <= 1 && g <= 1 && b <= 1) continue;
-		if (a === 0) continue;
-
-		// Calculate x and y coordinates
-		const pixelIndex = i / 4;
-		const x = (pixelIndex % displayWidth) / displayWidth;
-		const y = Math.floor(pixelIndex / displayWidth) / displayHeight;
-
-		// Add position and color data
-		finalPositions.push(x, y);
+		// Add color data
 		colors.push(r / 255, g / 255, b / 255, a / 255);
 	}
 
-	return { finalPositions, colors };
+	return colors;
 }
 
-export function getDrawingInfoFromURL() {
+// May assume that all alphas are 1.0
+function compressColorInfo(colors) {}
+
+export function getDrawingInfoFromURL(canvas) {
 	const url = new URL(window.location.href);
 	const drawingInfoParam = url.searchParams.get("drawingInfo");
 
 	// If no drawing info in URL, generate default data
 	if (!drawingInfoParam) {
-		const n = 5000;
-		return getDefaultDrawingData(n);
+		return getDefaultDrawingData(canvas);
 	}
 
 	return JSON.parse(drawingInfoParam);
 }
 
 // Helper function for generating default drawing data
-function getDefaultDrawingData(n) {
-	const finalPositions = [];
+function getDefaultDrawingData(canvas) {
 	const colors = [];
+	const displayWidth = canvas.clientWidth;
+	const displayHeight = canvas.clientHeight;
 
-	for (let i = 0; i < n; i++) {
-		finalPositions.push(-1.0, -1.0);
+	for (let i = 0; i < displayWidth * displayHeight; i++) {
 		const r = i === 0 ? 1.0 : 0.5;
 		const g = i === 0 ? 1.0 : 0.0;
 		const b = i === 0 ? 0.0 : 0.5;
@@ -196,7 +186,7 @@ function getDefaultDrawingData(n) {
 		colors.push(r, g, b, a);
 	}
 
-	return { finalPositions, colors };
+	return colors;
 }
 
 export function createDrawingURL(drawingInfo) {
