@@ -74,8 +74,9 @@ const createDrawingHandlers = (state, canvas) => ({
 	handleSubmit: () => {
 		const drawingInfo = getDrawingInfoFromCanvas(state, canvas);
 		const url = createDrawingURL(drawingInfo);
-		window.location.href = url;
+		// window.location.href = url;
 	},
+
 });
 
 // Canvas setup
@@ -99,7 +100,7 @@ export default function setupUserDrawing(document, canvasId) {
 	const state = createDrawingState(canvas);
 	state.ctx = pipe(createDrawingCanvasContext, (ctx) =>
 		setDrawingStyle(ctx, { color: state.color, lineWidth: state.lineWidth })
-	)(ctx, dpr);
+	)(canvas, dpr);
 
 	const handlers = createDrawingHandlers(state, canvas);
 
@@ -143,50 +144,22 @@ function getDrawingInfoFromCanvas(state, canvas) {
 	const imageData = state.ctx.getImageData(0, 0, displayWidth, displayHeight);
 	const data = imageData.data;
 
-	// Process each pixel
-	for (let i = 0; i < data.length; i += 4) {
-		const r = data[i];
-		const g = data[i + 1];
-		const b = data[i + 2];
-		const a = data[i + 3];
+	// // Process each pixel
+	// for (let i = 0; i < data.length; i += 4) {
+	// 	const r = data[i];
+	// 	const g = data[i + 1];
+	// 	const b = data[i + 2];
+	// 	const a = data[i + 3];
 
-		// Add color data
-		colors.push(r / 255, g / 255, b / 255, a / 255);
-	}
+	// 	// Add color data
+	// 	colors.push(r / 255, g / 255, b / 255, a / 255);
+	// }
 
-	return colors;
-}
+	// return colors;
 
-// May assume that all alphas are 1.0
-function compressColorInfo(colors) {}
-
-export function getDrawingInfoFromURL(canvas) {
-	const url = new URL(window.location.href);
-	const drawingInfoParam = url.searchParams.get("drawingInfo");
-
-	// If no drawing info in URL, generate default data
-	if (!drawingInfoParam) {
-		return getDefaultDrawingData(canvas);
-	}
-
-	return JSON.parse(drawingInfoParam);
-}
-
-// Helper function for generating default drawing data
-function getDefaultDrawingData(canvas) {
-	const colors = [];
-	const displayWidth = canvas.clientWidth;
-	const displayHeight = canvas.clientHeight;
-
-	for (let i = 0; i < displayWidth * displayHeight; i++) {
-		const r = i === 0 ? 1.0 : 0.5;
-		const g = i === 0 ? 1.0 : 0.0;
-		const b = i === 0 ? 0.0 : 0.5;
-		const a = 1.0;
-		colors.push(r, g, b, a);
-	}
-
-	return colors;
+	const jpegBase64 = canvas.toDataURL("image/jpeg", 0.1);
+	console.log(jpegBase64.length);
+	return jpegBase64;
 }
 
 export function createDrawingURL(drawingInfo) {

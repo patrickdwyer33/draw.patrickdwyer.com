@@ -1,9 +1,7 @@
 // modules
-import initGLCanvas from "src/scripts/webgl/init.js";
 import initBuffers from "src/scripts/webgl/buffers.js";
 import initShaderProgram from "src/scripts/webgl/shaders.js";
 import createAnimation from "src/scripts/webgl/animate.js";
-import { getDrawingInfoFromURL } from "src/scripts/drawing.js";
 import RBush from "rbush";
 
 async function importShaderSource(fileName) {
@@ -11,8 +9,7 @@ async function importShaderSource(fileName) {
 }
 
 // main loop
-export default async function runSimulation(canvasId, clearColor) {
-	const gl = initGLCanvas(canvasId, clearColor);
+export default async function runSimulation(gl, drawingInfo) {
 	const vertexShaderSource = await importShaderSource(
 		"src/shaders/vertex/basic.vert"
 	);
@@ -36,7 +33,7 @@ export default async function runSimulation(canvasId, clearColor) {
 			dotSize: gl.getUniformLocation(shaderProgram, "dotSize"),
 		},
 	};
-	const colors = getDrawingInfoFromURL(gl.canvas);
+	const colors = drawingInfo["colors"];
 	let n = colors.length / 4; // colors are flat and rgba
 	const buffers = initBuffers(gl, n, colors);
 
@@ -56,6 +53,8 @@ export default async function runSimulation(canvasId, clearColor) {
 		edgeSize,
 		dotSize,
 	};
+
+	const clearColor = drawingInfo["clearColor"];
 
 	// Start animation loop
 	createAnimation(
