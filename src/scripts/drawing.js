@@ -55,7 +55,6 @@ const createDrawingHandlers = (state, canvas) => ({
 	},
 
 	handleToolChange: (e) => {
-		console.log(e.target?.id);
 		state.ctx.strokeStyle =
 			e.target?.id === "eraser-button" ? "#000000" : state.color;
 	},
@@ -74,7 +73,7 @@ const createDrawingHandlers = (state, canvas) => ({
 	handleSubmit: () => {
 		const drawingInfo = getDrawingInfoFromCanvas(state, canvas);
 		const url = createDrawingURL(drawingInfo);
-		// window.location.href = url;
+		window.location.href = url;
 	},
 
 });
@@ -142,7 +141,7 @@ function getDrawingInfoFromCanvas(state, canvas) {
 
 	// Get the image data from the canvas
 	const imageData = state.ctx.getImageData(0, 0, displayWidth, displayHeight);
-	const data = imageData.data;
+	// const data = imageData.data;
 
 	// // Process each pixel
 	// for (let i = 0; i < data.length; i += 4) {
@@ -158,16 +157,12 @@ function getDrawingInfoFromCanvas(state, canvas) {
 	// return colors;
 
 	const jpegBase64 = canvas.toDataURL("image/jpeg", 0.1);
-	console.log(jpegBase64.length);
 	return jpegBase64;
 }
 
 export function createDrawingURL(drawingInfo) {
 	// Convert the drawing info to a JSON string
-	const drawingData = JSON.stringify({
-		finalPositions: drawingInfo.finalPositions,
-		colors: drawingInfo.colors,
-	});
+	const drawingData = drawingInfo
 
 	// Create the base URL
 	const baseURL = `${window.location.origin}/simulate`;
