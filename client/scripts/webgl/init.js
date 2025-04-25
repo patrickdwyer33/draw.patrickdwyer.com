@@ -1,4 +1,4 @@
-import { resizeCanvasToDisplaySize } from "src/scripts/utils/webgl-utils.js";
+import { resizeCanvasToDisplaySize } from "client/scripts/utils/webgl-utils.js";
 
 export default function init(canvasId, clearColor) {
 	const canvas = document.getElementById(canvasId);

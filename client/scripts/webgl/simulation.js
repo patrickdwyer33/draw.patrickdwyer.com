@@ -1,9 +1,9 @@
 // modules
-import initGLCanvas from "src/scripts/webgl/init.js";
-import initBuffers from "src/scripts/webgl/buffers.js";
-import initShaderProgram from "src/scripts/webgl/shaders.js";
-import createAnimation from "src/scripts/webgl/animate.js";
-import { getDrawingInfoFromURL } from "src/scripts/drawing.js";
+import initGLCanvas from "client/scripts/webgl/init.js";
+import initBuffers from "client/scripts/webgl/buffers.js";
+import initShaderProgram from "client/scripts/webgl/shaders.js";
+import createAnimation from "client/scripts/webgl/animate.js";
+import { getDrawingInfoFromURL } from "client/scripts/drawing.js";
 import RBush from "rbush";
 
 async function importShaderSource(fileName) {
@@ -14,10 +14,10 @@ async function importShaderSource(fileName) {
 export default async function runSimulation(canvasId, clearColor) {
 	const gl = initGLCanvas(canvasId, clearColor);
 	const vertexShaderSource = await importShaderSource(
-		"src/shaders/vertex/basic.vert"
+		"client/shaders/vertex/basic.vert"
 	);
 	const fragmentShaderSource = await importShaderSource(
-		"src/shaders/fragment/basic.frag"
+		"client/shaders/fragment/basic.frag"
 	);
 	const shaderProgram = initShaderProgram(
 		gl,
