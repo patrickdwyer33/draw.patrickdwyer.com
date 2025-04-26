@@ -13,7 +13,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Development mode with Vite middleware
-if (ENV !== "production") {
+if (ENV === "development") {
 	const vite = await createServer({
 		server: { middlewareMode: true },
 		appType: "mpa",
