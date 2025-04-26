@@ -12,6 +12,11 @@ const ENV = process.env.NODE_ENV || "development";
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// API Routes
+app.get("/api/health", (_, res) => {
+	res.json({ status: "ok" });
+});
+
 // Development mode with Vite middleware
 if (ENV === "development") {
 	const vite = await createServer({
@@ -22,11 +27,6 @@ if (ENV === "development") {
 	});
 	app.use(vite.middlewares);
 }
-
-// API Routes
-app.get("/api/health", (_, res) => {
-	res.json({ status: "ok" });
-});
 
 app.listen(PORT, () => {
 	console.log(`Server running on port ${PORT}`);
