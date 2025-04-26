@@ -1,7 +1,7 @@
 import express from "express";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
-import { createServer as createViteServer } from "vite";
+import { createServer } from "vite";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -14,9 +14,11 @@ app.use(express.urlencoded({ extended: true }));
 
 // Development mode with Vite middleware
 if (ENV !== "production") {
-	const vite = await createViteServer({
+	const vite = await createServer({
 		server: { middlewareMode: true },
 		appType: "mpa",
+		base: "/",
+		root: join(__dirname, ".."),
 	});
 	app.use(vite.middlewares);
 } else {
@@ -30,7 +32,7 @@ app.get("/api/health", (_, res) => {
 });
 
 // Catch-all route to serve index.html
-app.get("*", (_, res) => {
+app.get(/(.*)/, (_, res) => {
 	if (ENV === "production") {
 		res.sendFile(join(__dirname, "../dist/index.html"));
 	}

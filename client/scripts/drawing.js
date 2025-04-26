@@ -93,13 +93,10 @@ export default function setupUserDrawing(document, canvasId) {
 	canvas.width = displayWidth * dpr;
 	canvas.height = displayHeight * dpr;
 
-	// Scale the context to handle high DPI displays
-	const ctx = canvas.getContext("2d");
-
 	const state = createDrawingState(canvas);
 	state.ctx = pipe(createDrawingCanvasContext, (ctx) =>
 		setDrawingStyle(ctx, { color: state.color, lineWidth: state.lineWidth })
-	)(ctx, dpr);
+	)(canvas, dpr);
 
 	const handlers = createDrawingHandlers(state, canvas);
 
