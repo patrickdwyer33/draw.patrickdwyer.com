@@ -21,21 +21,11 @@ if (ENV !== "production") {
 		root: join(__dirname, ".."),
 	});
 	app.use(vite.middlewares);
-} else {
-	// Serve static files in production
-	app.use(express.static(join(__dirname, "../dist")));
 }
 
 // API Routes
 app.get("/api/health", (_, res) => {
 	res.json({ status: "ok" });
-});
-
-// Catch-all route to serve index.html
-app.get(/(.*)/, (_, res) => {
-	if (ENV === "production") {
-		res.sendFile(join(__dirname, "../dist/index.html"));
-	}
 });
 
 app.listen(PORT, () => {
