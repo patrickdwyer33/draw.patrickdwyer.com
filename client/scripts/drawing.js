@@ -1,4 +1,4 @@
-import { pipe } from "client/scripts/utils/fp.js";
+import { pipe } from "/scripts/utils/fp.js";
 
 export const createDrawingCanvasContext = (canvas, devicePixelRatio) => {
 	const ctx = canvas.getContext("2d");

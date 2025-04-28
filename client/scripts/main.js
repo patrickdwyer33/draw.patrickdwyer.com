@@ -1,9 +1,9 @@
-import Optional from "client/scripts/utils/optional.js";
-import Either from "client/scripts/utils/either.js";
+import Optional from "/scripts/utils/optional.js";
+import Either from "/scripts/utils/either.js";
 
-import initPWA from "client/scripts/pwa.js";
-import setupUserDrawing from "client/scripts/drawing.js";
-import runSimulation from "client/scripts/webgl/simulation.js";
+import initPWA from "/scripts/pwa.js";
+import setupUserDrawing from "/scripts/drawing.js";
+import runSimulation from "/scripts/webgl/simulation.js";
 
 // Initialize PWA
 const period = 60 * 1000;

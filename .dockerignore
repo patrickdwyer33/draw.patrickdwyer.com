@@ -1,0 +1,12 @@
+.github
+client
+node_modules
+dist
+server
+.cursorignore
+.gitignore
+.git
+.vscode
+deploy.sh
+package-lock.json
+README.md

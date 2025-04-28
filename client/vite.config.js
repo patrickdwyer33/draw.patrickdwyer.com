@@ -38,12 +38,6 @@ export default defineConfig({
 
 	// Add CORS configuration for the dev server
 	server: {
-		// proxy: {
-		// 	"/api": {
-		// 		target: "http://localhost:3000",
-		// 		changeOrigin: true,
-		// 	},
-		// },
 		cors: {
 			origin: "*", // Allow requests from any origin
 			methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
@@ -52,9 +46,10 @@ export default defineConfig({
 		},
 	},
 
-	resolve: {
-		alias: {
-			client: "/client",
-		},
-	},
+	// not used right now
+	// resolve: {
+	// 	alias: {
+	// 		client: "/client",
+	// 	},
+	// },
 });

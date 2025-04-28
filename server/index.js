@@ -6,6 +6,7 @@ import { createServer } from "vite";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = process.env.PORT || 3000;
+const HOST = process.env.HOST || "0.0.0.0";
 const ENV = process.env.NODE_ENV || "development";
 
 // Middleware for parsing JSON and urlencoded data
@@ -23,11 +24,11 @@ if (ENV === "development") {
 		server: { middlewareMode: true },
 		appType: "mpa",
 		base: "/",
-		root: join(__dirname, ".."),
+		root: join(__dirname, "../client"),
 	});
 	app.use(vite.middlewares);
 }
 
-app.listen(PORT, () => {
+app.listen(PORT, HOST, () => {
 	console.log(`Server running on port ${PORT}`);
 });
