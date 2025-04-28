@@ -3,12 +3,44 @@ import initGLCanvas from "/scripts/webgl/init.js";
 import initBuffers from "/scripts/webgl/buffers.js";
 import initShaderProgram from "/scripts/webgl/shaders.js";
 import createAnimation from "/scripts/webgl/animate.js";
-import { getDrawingInfoFromURL } from "/scripts/drawing.js";
 import RBush from "rbush";
 
 async function importShaderSource(fileName) {
 	return await fetch(fileName).then((response) => response.text());
 }
+
+const generateDefaultColors = (n) => {
+	const colors = [];
+	for (let i = 0; i < n - 1; i++) {
+		colors.push(0.6, 0.2, 0.8, 1.0);
+	}
+	// Add yellow (1, 1, 0, 1) for the last element
+	colors.push(1.0, 1.0, 0.0, 1.0); // RGBA for yellow
+	return colors;
+};
+
+const getDrawingInfo = async (width, height, dotSize) => {
+	const urlParams = new URLSearchParams(window.location.search);
+	const title = urlParams.get("title");
+	if (!title) {
+		// Generate random data if the API request fails
+		const n = 1000;
+		return {
+			title: "Random Drawing",
+			data: {
+				positions: generateRandomPositions(n, width, height, dotSize),
+				colors: generateDefaultColors(n),
+			},
+			created_at: new Date().toISOString(),
+			updated_at: new Date().toISOString(),
+		};
+	}
+	const url = `${window.location.origin}/api/drawings/${title}`;
+	const response = await fetch(url);
+	const data = await response.json();
+
+	return data;
+};
 
 // main loop
 export default async function runSimulation(canvasId, clearColor) {
@@ -36,21 +68,48 @@ export default async function runSimulation(canvasId, clearColor) {
 			dotSize: gl.getUniformLocation(shaderProgram, "dotSize"),
 		},
 	};
-	const colors = getDrawingInfoFromURL(gl.canvas);
-	let n = colors.length / 4; // colors are flat and rgba
-	const buffers = initBuffers(gl, n, colors);
 
 	const edgeSize = 1.0;
 	const dotSize = 4.0;
 
+	const drawingInfo = await getDrawingInfo(
+		gl.canvas.width,
+		gl.canvas.height,
+		dotSize
+	); // params are for random data generation
+
+	const drawingData = drawingInfo.data;
+	console.log(drawingData);
+
+	const positions = drawingData.positions;
+	let n = positions.length / 2; // positions are flat and x,y
+
+	const colors = drawingData.colors;
+	// Ensure colors array has 4 components (RGBA) for each position
+	if (colors.length === n * 3) {
+		// Convert from RGB to RGBA by adding alpha=1.0 to each color
+		const rgbaColors = [];
+		for (let i = 0; i < colors.length; i += 3) {
+			rgbaColors.push(
+				colors[i], // R
+				colors[i + 1], // G
+				colors[i + 2], // B
+				1.0 // A (default to fully opaque)
+			);
+		}
+		colors = rgbaColors;
+	} else if (colors.length !== n * 4) {
+		// If colors array doesn't match expected length for either RGB or RGBA
+		console.warn(
+			"Colors array has unexpected length. Expected RGB or RGBA format."
+		);
+	}
+
+	const buffers = initBuffers(gl, n, colors);
+
 	// Initialize animation state
 	const state = {
-		positions: generateRandomPositions(
-			n,
-			gl.canvas.width,
-			gl.canvas.height,
-			dotSize
-		),
+		positions: positions,
 		velocities: generateRandomVelocities(n),
 		continueAnimation: true,
 		edgeSize,

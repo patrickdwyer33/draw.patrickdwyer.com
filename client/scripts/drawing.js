@@ -30,7 +30,7 @@ const clearCanvas = (ctx, width, height) => {
 const createDrawingState = () => ({
 	isDrawing: false,
 	currentTool: "pencil",
-	color: "#ffffff",
+	color: "#000000",
 	lineWidth: 2,
 	lastX: 0,
 	lastY: 0,
@@ -71,9 +71,10 @@ const createDrawingHandlers = (state, canvas) => ({
 		}
 	},
 
-	handleSubmit: () => {
-		const drawingInfo = getDrawingInfoFromCanvas(state, canvas);
-		const url = createDrawingURL(drawingInfo);
+	handleSubmit: async () => {
+		const title = "test";
+		await postDrawing(title, state.color);
+		const url = `${window.location.origin}/simulate?title=${title}`;
 		window.location.href = url;
 	},
 });
@@ -129,76 +130,77 @@ export default function setupUserDrawing(document, canvasId) {
 	return { state, handlers };
 }
 
-function getDrawingInfoFromCanvas(state, canvas) {
+const getDrawingData = (canvas, clearColor) => {
+	const ctx = canvas.getContext("2d");
+	const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+	const pixels = imageData.data;
+
+	const positions = [];
 	const colors = [];
 
-	// Get the canvas's display size (not the internal size)
-	const displayWidth = canvas.clientWidth;
-	const displayHeight = canvas.clientHeight;
+	// Parse the clear color
+	const clearR = parseInt(clearColor.slice(1, 3), 16);
+	const clearG = parseInt(clearColor.slice(3, 5), 16);
+	const clearB = parseInt(clearColor.slice(5, 7), 16);
 
-	// Get the image data from the canvas
-	const imageData = state.ctx.getImageData(0, 0, displayWidth, displayHeight);
-	const data = imageData.data;
+	const CLEAR_THRESHOLD = 10; // Threshold for considering a pixel as "clear"
 
-	// Process each pixel
-	for (let i = 0; i < data.length; i += 4) {
-		const r = data[i];
-		const g = data[i + 1];
-		const b = data[i + 2];
-		const a = data[i + 3];
+	for (let i = 0; i < pixels.length; i += 4) {
+		const r = pixels[i];
+		const g = pixels[i + 1];
+		const b = pixels[i + 2];
 
-		// Add color data
-		colors.push(r / 255, g / 255, b / 255, a / 255);
+		// Skip if pixel is close to clear color
+		if (
+			Math.abs(r - clearR) < CLEAR_THRESHOLD &&
+			Math.abs(g - clearG) < CLEAR_THRESHOLD &&
+			Math.abs(b - clearB) < CLEAR_THRESHOLD
+		) {
+			continue;
+		}
+
+		// Calculate x, y position from index
+		const pixelIndex = i / 4;
+		const x = pixelIndex % canvas.width;
+		const y = Math.floor(pixelIndex / canvas.width);
+
+		positions.push(x, y);
+		colors.push(r, g, b);
 	}
 
-	return colors;
-}
+	return {
+		positions,
+		colors,
+	};
+};
 
-// May assume that all alphas are 1.0
-function compressColorInfo(colors) {}
-
-export function getDrawingInfoFromURL(canvas) {
-	const url = new URL(window.location.href);
-	const drawingInfoParam = url.searchParams.get("drawingInfo");
-
-	// If no drawing info in URL, generate default data
-	if (!drawingInfoParam) {
-		return getDefaultDrawingData(canvas);
+const postDrawing = async (title, clearColor) => {
+	const canvas = document.getElementById("drawing-canvas");
+	if (!canvas) {
+		throw new Error("Drawing canvas not found");
 	}
 
-	return JSON.parse(drawingInfoParam);
-}
+	const drawingData = getDrawingData(canvas, clearColor);
+	console.log(drawingData);
 
-// Helper function for generating default drawing data
-function getDefaultDrawingData(canvas) {
-	const colors = [];
-	const displayWidth = canvas.clientWidth;
-	const displayHeight = canvas.clientHeight;
+	try {
+		const url = `${window.location.origin}/api/drawings/${title}`;
+		console.log(url);
+		const response = await fetch(url, {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+			},
+			body: JSON.stringify(drawingData),
+		});
 
-	for (let i = 0; i < displayWidth * displayHeight; i++) {
-		const r = i === 0 ? 1.0 : 0.5;
-		const g = i === 0 ? 1.0 : 0.0;
-		const b = i === 0 ? 0.0 : 0.5;
-		const a = 1.0;
-		colors.push(r, g, b, a);
+		if (!response.ok) {
+			throw new Error(`HTTP error! status: ${response.status}`);
+		}
+
+		return await response.json();
+	} catch (error) {
+		console.error("Error posting drawing:", error);
+		throw error;
 	}
-
-	return colors;
-}
-
-export function createDrawingURL(drawingInfo) {
-	// Convert the drawing info to a JSON string
-	const drawingData = JSON.stringify({
-		finalPositions: drawingInfo.finalPositions,
-		colors: drawingInfo.colors,
-	});
-
-	// Create the base URL
-	const baseURL = `${window.location.origin}/simulate`;
-
-	// Create URL object and add the drawing info as a query parameter
-	const url = new URL(baseURL);
-	url.searchParams.set("drawingInfo", drawingData);
-
-	return url.toString();
-}
+};

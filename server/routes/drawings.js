@@ -42,7 +42,7 @@ router.get("/:title", async (req, res) => {
 router.post("/:title", async (req, res) => {
 	try {
 		const { title } = req.params;
-		const { data } = req.body;
+		const data = req.body;
 
 		if (!data) {
 			return res.status(400).json({ error: "Drawing data is required" });
