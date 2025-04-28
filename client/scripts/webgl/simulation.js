@@ -79,12 +79,11 @@ export default async function runSimulation(canvasId, clearColor) {
 	); // params are for random data generation
 
 	const drawingData = drawingInfo.data;
-	console.log(drawingData);
 
-	const positions = drawingData.positions;
-	let n = positions.length / 2; // positions are flat and x,y
+	const finalPositions = drawingData.positions;
+	let n = finalPositions.length / 2; // positions are flat and x,y
 
-	const colors = drawingData.colors;
+	let colors = drawingData.colors;
 	// Ensure colors array has 4 components (RGBA) for each position
 	if (colors.length === n * 3) {
 		// Convert from RGB to RGBA by adding alpha=1.0 to each color
@@ -109,7 +108,7 @@ export default async function runSimulation(canvasId, clearColor) {
 
 	// Initialize animation state
 	const state = {
-		positions: positions,
+		positions: finalPositions,
 		velocities: generateRandomVelocities(n),
 		continueAnimation: true,
 		edgeSize,

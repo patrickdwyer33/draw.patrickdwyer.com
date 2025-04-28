@@ -13,7 +13,8 @@ const routes = {
 	"/": () => {
 		console.log("Main route");
 		const canvasId = "drawing-canvas";
-		setupUserDrawing(document, canvasId);
+		const clearColorString = "#000000";
+		setupUserDrawing(document, canvasId, clearColorString);
 	},
 	"/simulate": () => {
 		console.log("Simulation route");

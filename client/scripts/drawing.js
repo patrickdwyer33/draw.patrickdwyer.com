@@ -1,10 +1,14 @@
 import { pipe } from "/scripts/utils/fp.js";
 
-export const createDrawingCanvasContext = (canvas, devicePixelRatio) => {
+export const createDrawingCanvasContext = (
+	canvas,
+	devicePixelRatio,
+	fillColor
+) => {
 	const ctx = canvas.getContext("2d");
 	ctx.scale(devicePixelRatio, devicePixelRatio);
 	ctx.imageSmoothingEnabled = false;
-	ctx.fillStyle = "black";
+	ctx.fillStyle = fillColor;
 	ctx.fillRect(0, 0, canvas.width, canvas.height);
 	return ctx;
 };
@@ -27,10 +31,11 @@ const clearCanvas = (ctx, width, height) => {
 };
 
 // Drawing state management
-const createDrawingState = () => ({
+const createDrawingState = (fillColor) => ({
 	isDrawing: false,
 	currentTool: "pencil",
-	color: "#000000",
+	color: "#ffffff",
+	fillColor,
 	lineWidth: 2,
 	lastX: 0,
 	lastY: 0,
@@ -55,7 +60,6 @@ const createDrawingHandlers = (state, canvas) => ({
 	},
 
 	handleToolChange: (e) => {
-		console.log(e.target?.id);
 		state.ctx.strokeStyle =
 			e.target?.id === "eraser-button" ? "#000000" : state.color;
 	},
@@ -73,14 +77,14 @@ const createDrawingHandlers = (state, canvas) => ({
 
 	handleSubmit: async () => {
 		const title = "test";
-		await postDrawing(title, state.color);
+		await postDrawing(title, state.fillColor);
 		const url = `${window.location.origin}/simulate?title=${title}`;
 		window.location.href = url;
 	},
 });
 
 // Canvas setup
-export default function setupUserDrawing(document, canvasId) {
+export default function setupUserDrawing(document, canvasId, clearColor) {
 	const canvas = document.getElementById(canvasId);
 
 	// Get the canvas's display size from CSS
@@ -94,10 +98,10 @@ export default function setupUserDrawing(document, canvasId) {
 	canvas.width = displayWidth * dpr;
 	canvas.height = displayHeight * dpr;
 
-	const state = createDrawingState(canvas);
+	const state = createDrawingState(clearColor);
 	state.ctx = pipe(createDrawingCanvasContext, (ctx) =>
 		setDrawingStyle(ctx, { color: state.color, lineWidth: state.lineWidth })
-	)(canvas, dpr);
+	)(canvas, dpr, state.fillColor);
 
 	const handlers = createDrawingHandlers(state, canvas);
 
@@ -142,6 +146,8 @@ const getDrawingData = (canvas, clearColor) => {
 	const clearR = parseInt(clearColor.slice(1, 3), 16);
 	const clearG = parseInt(clearColor.slice(3, 5), 16);
 	const clearB = parseInt(clearColor.slice(5, 7), 16);
+	console.log(clearColor);
+	console.log(clearR, clearG, clearB);
 
 	const CLEAR_THRESHOLD = 10; // Threshold for considering a pixel as "clear"
 
@@ -167,6 +173,7 @@ const getDrawingData = (canvas, clearColor) => {
 		positions.push(x, y);
 		colors.push(r, g, b);
 	}
+	console.log(positions);
 
 	return {
 		positions,
