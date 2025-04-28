@@ -1,22 +1,19 @@
 import express from "express";
 import { createServer } from "vite";
+import { appRoutes } from "./routes.js";
 
-// import { fileURLToPath } from "url";
-// import { dirname } from "path";
-// const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || "0.0.0.0";
 const ENV = process.env.NODE_ENV || "development";
+const API_ROOT = process.env.API_ROOT || "/api";
 
 // Middleware for parsing JSON and urlencoded data
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // API Routes
-app.get("/api/health", (_, res) => {
-	res.json({ status: "ok" });
-});
+app.use(API_ROOT, appRoutes);
 
 // Development mode with Vite middleware
 if (ENV === "development") {
@@ -30,5 +27,5 @@ if (ENV === "development") {
 }
 
 app.listen(PORT, HOST, () => {
-	console.log(`Server running on port ${PORT}`);
+	console.log(`Server running at: \n\n${HOST}:${PORT}`);
 });
