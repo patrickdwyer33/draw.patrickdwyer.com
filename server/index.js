@@ -1,9 +1,9 @@
 import express from "express";
-import { fileURLToPath } from "url";
-import { dirname, join } from "path";
 import { createServer } from "vite";
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
+// import { fileURLToPath } from "url";
+// import { dirname } from "path";
+// const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || "0.0.0.0";
@@ -23,8 +23,8 @@ if (ENV === "development") {
 	const vite = await createServer({
 		server: { middlewareMode: true },
 		appType: "mpa",
-		base: "/",
-		root: join(__dirname, "../client"),
+		base: "/client",
+		root: "client",
 	});
 	app.use(vite.middlewares);
 }

@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "docker run --init -it -e NODE_ENV=development -p 3000:3000 -v $(pwd)/client:/app/client -v $(pwd)/server:/app/server -v $(pwd)/public:/app/public draw.patrickdwyer.com:latest",
+    "dev": "docker run --init -it -e NODE_ENV=development -p 3000:3000 -v $(pwd)/client:/app/client -v $(pwd)/server:/app/server draw.patrickdwyer.com:latest",
     "start": "NODE_ENV=production node server/index.js",
     "build": "vite build",
     "preview": "vite preview"
@@ -12,8 +12,7 @@
   "devDependencies": {
     "@vite-pwa/assets-generator": "^0.2.6",
     "vite": "^6.0.11",
-    "vite-plugin-pwa": "^0.21.1",
-    "workbox-window": "^7.3.0"
+    "vite-plugin-pwa": "^0.21.1"
   },
   "overrides": {
     "sharp": "0.32.6",
