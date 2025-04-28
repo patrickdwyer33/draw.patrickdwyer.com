@@ -165,8 +165,8 @@ const getDrawingData = (canvas, clearColor) => {
 
 		// Calculate x, y position from index
 		const pixelIndex = i / 4;
-		const x = pixelIndex % canvas.width;
-		const y = Math.floor(pixelIndex / canvas.width);
+		const x = (pixelIndex % canvas.width) / canvas.width;
+		const y = Math.floor(pixelIndex / canvas.width) / canvas.height;
 
 		positions.push(x, y);
 		colors.push(r, g, b);

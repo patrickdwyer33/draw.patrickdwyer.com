@@ -81,6 +81,14 @@ export default async function runSimulation(canvasId, clearColor) {
 	const drawingData = drawingInfo.data;
 
 	const finalPositions = drawingData.positions;
+	// Scale positions from normalized [0,1] range to actual canvas dimensions
+	for (let i = 0; i < finalPositions.length; i += 2) {
+		// Scale x-coordinate by canvas width
+		finalPositions[i] = finalPositions[i] * gl.canvas.width;
+		// Scale y-coordinate by canvas height
+		finalPositions[i + 1] = finalPositions[i + 1] * gl.canvas.height;
+	}
+	console.log(finalPositions);
 	let n = finalPositions.length / 2; // positions are flat and x,y
 
 	let colors = drawingData.colors;
