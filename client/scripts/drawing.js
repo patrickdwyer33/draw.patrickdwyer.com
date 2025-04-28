@@ -146,8 +146,6 @@ const getDrawingData = (canvas, clearColor) => {
 	const clearR = parseInt(clearColor.slice(1, 3), 16);
 	const clearG = parseInt(clearColor.slice(3, 5), 16);
 	const clearB = parseInt(clearColor.slice(5, 7), 16);
-	console.log(clearColor);
-	console.log(clearR, clearG, clearB);
 
 	const CLEAR_THRESHOLD = 10; // Threshold for considering a pixel as "clear"
 
@@ -173,7 +171,6 @@ const getDrawingData = (canvas, clearColor) => {
 		positions.push(x, y);
 		colors.push(r, g, b);
 	}
-	console.log(positions);
 
 	return {
 		positions,
@@ -188,11 +185,9 @@ const postDrawing = async (title, clearColor) => {
 	}
 
 	const drawingData = getDrawingData(canvas, clearColor);
-	console.log(drawingData);
 
 	try {
 		const url = `${window.location.origin}/api/drawings/${title}`;
-		console.log(url);
 		const response = await fetch(url, {
 			method: "POST",
 			headers: {
