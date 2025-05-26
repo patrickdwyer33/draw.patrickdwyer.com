@@ -1,6 +1,6 @@
 /**
  * Optional/Maybe type implementation
- * Handles nullable values safely
+ * handles nullable values safely
  */
 
 class Optional {

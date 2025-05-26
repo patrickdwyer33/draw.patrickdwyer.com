@@ -27,7 +27,7 @@ export default defineConfig({
 				skipWaiting: true,
 			},
 
-			// uncomment if you want to test pwa in dev env
+			// Uncomment if you want to test pwa in dev env
 			// devOptions: {
 			// 	enabled: true,
 			// 	suppressWarnings: false,
@@ -46,10 +46,9 @@ export default defineConfig({
 		},
 	},
 
-	// not used right now
-	// resolve: {
-	// 	alias: {
-	// 		client: "/client",
-	// 	},
-	// },
+	resolve: {
+		alias: {
+			client: "/client",
+		},
+	},
 });

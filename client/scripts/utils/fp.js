@@ -1,8 +1,7 @@
 /**
- * Core functional programming utilities
+ * core functional programming utilities
  */
 
-// Function composition (right to left)
 export const compose = (...fns) =>
 	fns.reduceRight(
 		(f, g) =>
@@ -10,7 +9,6 @@ export const compose = (...fns) =>
 				f(g(...args))
 	);
 
-// Function composition (left to right)
 export const pipe = (...fns) =>
 	fns.reduce(
 		(f, g) =>
@@ -18,7 +16,6 @@ export const pipe = (...fns) =>
 				g(f(...args))
 	);
 
-// Curry function implementation
 export const curry = (fn) => {
 	const arity = fn.length;
 	return function curried(...args) {
@@ -29,31 +26,26 @@ export const curry = (fn) => {
 	};
 };
 
-// Partial application
 export const partial =
 	(fn, ...args) =>
 	(...moreArgs) =>
 		fn(...args, ...moreArgs);
 
-// Map implementation for various data types
 export const map = curry((fn, functor) => functor.map(fn));
 
-// Chain/flatMap implementation
 export const chain = curry((fn, monad) => monad.chain(fn));
 
-// Tap for side effects in pipelines
 export const tap = curry((fn, x) => {
 	fn(x);
 	return x;
 });
 
-// Safe property access
 export const prop = curry((key, obj) => obj?.[key]);
 
 /**
- * Creates a function that memoizes the result of a function
- * @param {Function} fn - Function to memoize
- * @returns {Function} Memoized function
+ * creates a function that memoizes the result of a function
+ * @param {Function} fn - function to memoize
+ * @returns {Function} memoized function
  */
 export const memoize = (fn) => {
 	const cache = new Map();
@@ -67,10 +59,10 @@ export const memoize = (fn) => {
 };
 
 /**
- * Creates a function that debounces another function
- * @param {Function} fn - Function to debounce
- * @param {number} delay - Delay in milliseconds
- * @returns {Function} Debounced function
+ * creates a function that debounces another function
+ * @param {Function} fn - function to debounce
+ * @param {number} delay - delay in milliseconds
+ * @returns {Function} debounced function
  */
 export const debounce = (fn, delay) => {
 	let timeoutId;

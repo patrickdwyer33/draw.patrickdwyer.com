@@ -7,5 +7,4 @@ appRoutes.get("/health", (_, res) => {
 	res.json({ status: "ok" });
 });
 
-// Mount drawing routes
 appRoutes.use("/drawings", drawingRoutes);

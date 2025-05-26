@@ -117,6 +117,5 @@ class DatabaseService {
 	}
 }
 
-// Create a singleton instance
 const databaseService = new DatabaseService();
 export default databaseService;

@@ -30,7 +30,6 @@ const clearCanvas = (ctx, width, height) => {
 	ctx.fillRect(0, 0, width, height);
 };
 
-// Drawing state management
 const createDrawingState = (fillColor) => ({
 	isDrawing: false,
 	currentTool: "pencil",
@@ -42,7 +41,6 @@ const createDrawingState = (fillColor) => ({
 	ctx: null,
 });
 
-// Event handlers
 const createDrawingHandlers = (state, canvas) => ({
 	handleMouseDown: (e) => {
 		state.isDrawing = true;
@@ -83,7 +81,6 @@ const createDrawingHandlers = (state, canvas) => ({
 	},
 });
 
-// Canvas setup
 export default function setupUserDrawing(document, canvasId, clearColor) {
 	const canvas = document.getElementById(canvasId);
 
@@ -105,13 +102,11 @@ export default function setupUserDrawing(document, canvasId, clearColor) {
 
 	const handlers = createDrawingHandlers(state, canvas);
 
-	// Event listeners
 	canvas.addEventListener("mousedown", handlers.handleMouseDown);
 	canvas.addEventListener("mousemove", handlers.handleMouseMove);
 	canvas.addEventListener("mouseup", handlers.handleMouseUp);
 	canvas.addEventListener("mouseout", handlers.handleMouseUp);
 
-	// Set up toolbar events
 	document
 		.querySelectorAll("#pencil-button,#eraser-button")
 		.forEach((ele) =>
@@ -124,7 +119,6 @@ export default function setupUserDrawing(document, canvasId, clearColor) {
 		.querySelector("#color-picker")
 		.addEventListener("input", handlers.handleColorChange);
 
-	// Set initial active tool
 	document.querySelector("#pencil-button").classList.add("active");
 
 	document
@@ -134,6 +128,12 @@ export default function setupUserDrawing(document, canvasId, clearColor) {
 	return { state, handlers };
 }
 
+const get2DArrayFloatCoordsFromIndex = (index, width, height) => {
+	const x = (index % width) / width;
+	const y = (Math.floor(index / width) / height) * 100;
+	return { x, y };
+};
+
 const getDrawingData = (canvas, clearColor) => {
 	const ctx = canvas.getContext("2d");
 	const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
@@ -142,31 +142,30 @@ const getDrawingData = (canvas, clearColor) => {
 	const positions = [];
 	const colors = [];
 
-	// Parse the clear color
 	const clearR = parseInt(clearColor.slice(1, 3), 16);
 	const clearG = parseInt(clearColor.slice(3, 5), 16);
 	const clearB = parseInt(clearColor.slice(5, 7), 16);
 
-	const CLEAR_THRESHOLD = 10; // Threshold for considering a pixel as "clear"
+	const CLEAR_THRESHOLD = 10;
 
 	for (let i = 0; i < pixels.length; i += 4) {
 		const r = pixels[i];
 		const g = pixels[i + 1];
 		const b = pixels[i + 2];
 
-		// Skip if pixel is close to clear color
 		if (
 			Math.abs(r - clearR) < CLEAR_THRESHOLD &&
 			Math.abs(g - clearG) < CLEAR_THRESHOLD &&
 			Math.abs(b - clearB) < CLEAR_THRESHOLD
-		) {
+		)
 			continue;
-		}
 
-		// Calculate x, y position from index
 		const pixelIndex = i / 4;
-		const x = (pixelIndex % canvas.width) / canvas.width;
-		const y = Math.floor(pixelIndex / canvas.width) / canvas.height;
+		const { x, y } = get2DArrayFloatCoordsFromIndex(
+			pixelIndex,
+			canvas.width,
+			canvas.height
+		);
 
 		positions.push(x, y);
 		colors.push(r, g, b);

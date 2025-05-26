@@ -21,12 +21,11 @@ function initColorBuffer(gl, colors) {
 function initPositionBuffer(gl, n) {
 	const positionBuffer = gl.createBuffer();
 
-	// Select the positionBuffer as the one to apply buffer
-	// operations to from here out.
 	gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
 
 	// Allocate space for the buffer without passing data
-	gl.bufferData(gl.ARRAY_BUFFER, n * 2 * 4, gl.DYNAMIC_DRAW); // n * 2 for x,y coordinates * 4 bytes per Float32
+	// n * 2 for x,y coordinates * 4 bytes per Float32
+	gl.bufferData(gl.ARRAY_BUFFER, n * 2 * 4, gl.DYNAMIC_DRAW);
 
 	return positionBuffer;
 }

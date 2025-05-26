@@ -8,10 +8,8 @@ const router = Router();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Rate limit in minutes
 const RATE_LIMIT_MINUTES = 5;
 
-// Get drawing by title
 router.get("/:title", async (req, res) => {
 	try {
 		const { title } = req.params;
@@ -23,7 +21,6 @@ router.get("/:title", async (req, res) => {
 				.json({ error: `Drawing "${title}" not found` });
 		}
 
-		// Read the drawing data from file
 		const drawingData = await fs.readFile(drawing.file_path, "utf8");
 
 		res.json({
@@ -38,7 +35,6 @@ router.get("/:title", async (req, res) => {
 	}
 });
 
-// Create or update drawing by title
 router.post("/:title", async (req, res) => {
 	try {
 		const { title } = req.params;
@@ -48,7 +44,6 @@ router.post("/:title", async (req, res) => {
 			return res.status(400).json({ error: "Drawing data is required" });
 		}
 
-		// Check if drawing exists and check rate limit
 		const existingDrawing = await databaseService.getDrawingByTitle(title);
 		if (existingDrawing) {
 			const lastUpdate = new Date(existingDrawing.updated_at);
@@ -67,24 +62,18 @@ router.post("/:title", async (req, res) => {
 			}
 		}
 
-		// Create the drawings directory if it doesn't exist
 		const drawingsDir = path.join(__dirname, "../../data/drawings");
 		await fs.mkdir(drawingsDir, { recursive: true });
 
-		// Generate a unique filename
 		const filename = `${title}-${Date.now()}.json`;
 		const filePath = path.join(drawingsDir, filename);
 
-		// Save the drawing data to file
 		await fs.writeFile(filePath, JSON.stringify(data));
 
 		if (existingDrawing) {
-			// Delete the old file
 			await fs.unlink(existingDrawing.file_path);
-			// Update the database entry
 			await databaseService.updateDrawingByTitle(title, title, filePath);
 		} else {
-			// Create new database entry
 			await databaseService.createDrawing(title, filePath);
 		}
 

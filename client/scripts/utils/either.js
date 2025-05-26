@@ -1,6 +1,6 @@
 /**
  * Either monad implementation
- * Represents computations that might fail
+ * represents computations that might fail
  */
 
 class Either {
