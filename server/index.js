@@ -13,10 +13,8 @@ const MAX_PAYLOAD_SIZE = process.env.MAX_PAYLOAD_SIZE || "200mb";
 app.use(express.json({ limit: MAX_PAYLOAD_SIZE }));
 app.use(express.urlencoded({ extended: true, limit: MAX_PAYLOAD_SIZE }));
 
-// API routes
 app.use(API_ROOT, appRoutes);
 
-// Development mode with Vite middleware
 if (ENV === "development") {
 	const vite = await createServer({
 		server: { middlewareMode: true },
