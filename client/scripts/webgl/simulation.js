@@ -67,7 +67,9 @@ export default async function runSimulation(canvasId, clearColor) {
 	};
 
 	const edgeSize = 1.0;
-	const dotSize = 4.0;
+	const dotSize = 4.0; // diameter
+	const numBallsPerDrawnPixel = 1;
+	const finalDistanceThresholdSquared = (4 * (edgeSize + dotSize)) ** 2; // This is the squared distance between a dots current position and final position that will be considered a "collision" (thus stopping the ball and snapping it to the final position)
 
 	const drawingInfo = await getDrawingInfo(
 		gl.canvas.width,
@@ -83,7 +85,6 @@ export default async function runSimulation(canvasId, clearColor) {
 		finalPositions[i] = finalPositions[i] * gl.canvas.width;
 		finalPositions[i + 1] = finalPositions[i + 1] * gl.canvas.height;
 	}
-	console.log(finalPositions);
 	let n = finalPositions.length / 2; // Positions are flat and x,y
 
 	let colors = drawingData.colors;
@@ -100,14 +101,47 @@ export default async function runSimulation(canvasId, clearColor) {
 		);
 	}
 
-	const buffers = initBuffers(gl, n, colors);
+	const numBalls = n * numBallsPerDrawnPixel;
+
+	// Create expanded colors array for all balls
+	const expandedColors = [];
+	for (let i = 0; i < n; i++) {
+		const colorIndex = i * 4;
+		for (let j = 0; j < numBallsPerDrawnPixel; j++) {
+			expandedColors.push(
+				colors[colorIndex],
+				colors[colorIndex + 1],
+				colors[colorIndex + 2],
+				colors[colorIndex + 3]
+			);
+		}
+	}
+
+	const buffers = initBuffers(gl, numBalls, expandedColors);
+
+	const finalPositionsMap = new Map(
+		Array.from({ length: numBalls }, (_, i) => [
+			i,
+			[
+				finalPositions[Math.floor(i / numBallsPerDrawnPixel) * 2],
+				finalPositions[Math.floor(i / numBallsPerDrawnPixel) * 2 + 1],
+			],
+		])
+	);
 
 	const state = {
-		positions: finalPositions,
-		velocities: generateRandomVelocities(n),
+		positions: generateRandomPositions(
+			numBalls,
+			gl.canvas.width,
+			gl.canvas.height,
+			dotSize
+		),
+		finalPositionsMap,
+		velocities: generateRandomVelocities(numBalls),
 		continueAnimation: true,
 		edgeSize,
 		dotSize,
+		finalDistanceThresholdSquared,
 	};
 
 	createAnimation(
@@ -116,7 +150,7 @@ export default async function runSimulation(canvasId, clearColor) {
 		programInfo,
 		buffers,
 		clearColor,
-		n,
+		numBalls,
 		state
 	);
 }
@@ -325,11 +359,19 @@ function updateAnimationState(
 	for (let i = 0; i < n; i++) {
 		const xIndexOffset = i * 2;
 		const yIndexOffset = xIndexOffset + 1;
-		state.positions[xIndexOffset] +=
-			state.velocities[xIndexOffset] * deltaTime;
-		state.positions[yIndexOffset] +=
-			state.velocities[yIndexOffset] * deltaTime;
+		const finalPosition = state.finalPositionsMap.get(i);
+		const distSquared =
+			(state.positions[xIndexOffset] - finalPosition[0]) ** 2 +
+			(state.positions[yIndexOffset] - finalPosition[1]) ** 2;
+		if (distSquared > state.finalDistanceThresholdSquared) {
+			state.positions[xIndexOffset] +=
+				state.velocities[xIndexOffset] * deltaTime;
+			state.positions[yIndexOffset] +=
+				state.velocities[yIndexOffset] * deltaTime;
+		}
 	}
+
+	//
 
 	gl.bindBuffer(gl.ARRAY_BUFFER, buffers.positions);
 	gl.bufferSubData(gl.ARRAY_BUFFER, 0, new Float32Array(state.positions));
