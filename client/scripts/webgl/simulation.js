@@ -69,7 +69,7 @@ export default async function runSimulation(canvasId, clearColor) {
 	const edgeSize = 1.0;
 	const dotSize = 4.0; // diameter
 	const numBallsPerDrawnPixel = 1;
-	const finalDistanceThresholdSquared = (4 * (edgeSize + dotSize)) ** 2; // This is the squared distance between a dots current position and final position that will be considered a "collision" (thus stopping the ball and snapping it to the final position)
+	const finalDistanceThresholdSquared = (edgeSize + dotSize) ** 2 * 2; // This is the squared distance between a dots current position and final position that will be considered a "collision" (thus stopping the ball and snapping it to the final position)
 
 	const drawingInfo = await getDrawingInfo(
 		gl.canvas.width,
@@ -80,6 +80,7 @@ export default async function runSimulation(canvasId, clearColor) {
 	const drawingData = drawingInfo.data;
 
 	const finalPositions = drawingData.positions;
+	console.log(finalPositions);
 	// Scale positions from normalized [0,1] range to actual canvas dimensions
 	for (let i = 0; i < finalPositions.length; i += 2) {
 		finalPositions[i] = finalPositions[i] * gl.canvas.width;
@@ -128,6 +129,8 @@ export default async function runSimulation(canvasId, clearColor) {
 			],
 		])
 	);
+
+	console.log(gl.canvas.width, gl.canvas.height);
 
 	const state = {
 		positions: generateRandomPositions(
@@ -263,6 +266,32 @@ function positionsArrayDistSquared(positions, idx1, idx2) {
 	);
 }
 
+function distanceToLineSegment(x1, y1, x2, y2, px, py) {
+	// Calculate the squared length of the line segment
+	const lineLengthSquared = (x2 - x1) ** 2 + (y2 - y1) ** 2;
+
+	// If the line segment is actually a point, return distance to that point
+	if (lineLengthSquared === 0) {
+		return (px - x1) ** 2 + (py - y1) ** 2;
+	}
+
+	// Calculate the projection of the point onto the line
+	const t = Math.max(
+		0,
+		Math.min(
+			1,
+			((px - x1) * (x2 - x1) + (py - y1) * (y2 - y1)) / lineLengthSquared
+		)
+	);
+
+	// Calculate the closest point on the line segment
+	const closestX = x1 + t * (x2 - x1);
+	const closestY = y1 + t * (y2 - y1);
+
+	// Return squared distance to the closest point
+	return (px - closestX) ** 2 + (py - closestY) ** 2;
+}
+
 function updateAnimationState(
 	deltaTime,
 	gl,
@@ -360,18 +389,35 @@ function updateAnimationState(
 		const xIndexOffset = i * 2;
 		const yIndexOffset = xIndexOffset + 1;
 		const finalPosition = state.finalPositionsMap.get(i);
-		const distSquared =
-			(state.positions[xIndexOffset] - finalPosition[0]) ** 2 +
-			(state.positions[yIndexOffset] - finalPosition[1]) ** 2;
+
+		// Calculate next position
+		const nextX =
+			state.positions[xIndexOffset] +
+			state.velocities[xIndexOffset] * deltaTime;
+		const nextY =
+			state.positions[yIndexOffset] +
+			state.velocities[yIndexOffset] * deltaTime;
+
+		// Calculate minimum distance between the line segment and final position
+		const distSquared = distanceToLineSegment(
+			state.positions[xIndexOffset],
+			state.positions[yIndexOffset],
+			nextX,
+			nextY,
+			finalPosition[0],
+			finalPosition[1]
+		);
+
 		if (distSquared > state.finalDistanceThresholdSquared) {
-			state.positions[xIndexOffset] +=
-				state.velocities[xIndexOffset] * deltaTime;
-			state.positions[yIndexOffset] +=
-				state.velocities[yIndexOffset] * deltaTime;
+			state.positions[xIndexOffset] = nextX;
+			state.positions[yIndexOffset] = nextY;
+		} else {
+			state.positions[xIndexOffset] = finalPosition[0];
+			state.positions[yIndexOffset] = finalPosition[1];
+			state.velocities[xIndexOffset] = 0;
+			state.velocities[yIndexOffset] = 0;
 		}
 	}
-
-	//
 
 	gl.bindBuffer(gl.ARRAY_BUFFER, buffers.positions);
 	gl.bufferSubData(gl.ARRAY_BUFFER, 0, new Float32Array(state.positions));

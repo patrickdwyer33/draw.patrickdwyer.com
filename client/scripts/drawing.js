@@ -74,7 +74,7 @@ const createDrawingHandlers = (state, canvas) => ({
 	},
 
 	handleSubmit: async () => {
-		const title = "test";
+		const title = "test2";
 		await postDrawing(title, state.fillColor);
 		const url = `${window.location.origin}/simulate?title=${title}`;
 		window.location.href = url;
@@ -130,7 +130,7 @@ export default function setupUserDrawing(document, canvasId, clearColor) {
 
 const get2DArrayFloatCoordsFromIndex = (index, width, height) => {
 	const x = (index % width) / width;
-	const y = (Math.floor(index / width) / height) * 100;
+	const y = Math.floor(index / width) / height;
 	return { x, y };
 };
 
