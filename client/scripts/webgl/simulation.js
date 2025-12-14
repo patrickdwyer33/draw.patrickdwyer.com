@@ -80,7 +80,6 @@ export default async function runSimulation(canvasId, clearColor) {
 	const drawingData = drawingInfo.data;
 
 	const finalPositions = drawingData.positions;
-	console.log(finalPositions);
 	// Scale positions from normalized [0,1] range to actual canvas dimensions
 	for (let i = 0; i < finalPositions.length; i += 2) {
 		finalPositions[i] = finalPositions[i] * gl.canvas.width;
@@ -130,7 +129,18 @@ export default async function runSimulation(canvasId, clearColor) {
 		])
 	);
 
-	console.log(gl.canvas.width, gl.canvas.height);
+	// Generate random timeouts between 30-120 seconds for each ball
+	const ballTimeouts = new Array(numBalls);
+	const ballSeekingStartTime = new Array(numBalls);
+	const ballStuck = new Array(numBalls);
+	const ballErased = new Array(numBalls);
+
+	for (let i = 0; i < numBalls; i++) {
+		ballTimeouts[i] = 30 + Math.random() * 90; // 30-120 seconds
+		ballSeekingStartTime[i] = -1; // -1 means not seeking yet
+		ballStuck[i] = false;
+		ballErased[i] = false;
+	}
 
 	const state = {
 		positions: generateRandomPositions(
@@ -145,6 +155,12 @@ export default async function runSimulation(canvasId, clearColor) {
 		edgeSize,
 		dotSize,
 		finalDistanceThresholdSquared,
+		ballTimeouts,
+		ballSeekingStartTime,
+		ballStuck,
+		ballErased,
+		startTime: -1, // Will be set on first frame
+		elapsedTime: 0,
 	};
 
 	createAnimation(
@@ -294,6 +310,7 @@ function distanceToLineSegment(x1, y1, x2, y2, px, py) {
 
 function updateAnimationState(
 	deltaTime,
+	now,
 	gl,
 	programInfo,
 	buffers,
@@ -301,11 +318,23 @@ function updateAnimationState(
 	n,
 	state
 ) {
+	// Initialize start time on first frame
+	if (state.startTime === -1) {
+		state.startTime = now;
+	}
+	state.elapsedTime = now - state.startTime;
+
 	const dotRadius = state.dotSize / 2;
 
 	const bboxes = [];
 
 	for (let i = 0; i < n; i++) {
+		// Skip erased balls for collision detection
+		if (state.ballErased[i]) {
+			bboxes.push(null);
+			continue;
+		}
+
 		const xIndexOffset = i * 2;
 		const yIndexOffset = xIndexOffset + 1;
 		const x = state.positions[xIndexOffset];
@@ -339,13 +368,14 @@ function updateAnimationState(
 	}
 
 	const tree = new RBush(9);
-	tree.load(bboxes);
+	tree.load(bboxes.filter(bbox => bbox !== null));
 	const foundCollisionIds = new Set();
 	for (let i = 0; i < n; i++) {
 		if (foundCollisionIds.has(i)) {
 			continue;
 		}
 		const bbox = bboxes[i];
+		if (!bbox) continue; // Skip erased balls
 		const collisions = tree.search(bbox);
 		let collision = collisions.pop();
 		// Just handling one collision at a time for now. Will need to handle the edge case later
@@ -385,7 +415,48 @@ function updateAnimationState(
 		state.velocities[yIndexOffsetCollision] = vy2;
 	}
 
+	// Handle time-based behavior for balls
 	for (let i = 0; i < n; i++) {
+		// Skip if ball is already stuck or erased
+		if (state.ballStuck[i] || state.ballErased[i]) continue;
+
+		const xIndexOffset = i * 2;
+		const yIndexOffset = xIndexOffset + 1;
+		const finalPosition = state.finalPositionsMap.get(i);
+
+		// Check if timeout has passed and ball should start seeking
+		if (state.elapsedTime > state.ballTimeouts[i] && state.ballSeekingStartTime[i] === -1) {
+			// Start seeking - change velocity to point towards final position
+			state.ballSeekingStartTime[i] = state.elapsedTime;
+
+			const dx = finalPosition[0] - state.positions[xIndexOffset];
+			const dy = finalPosition[1] - state.positions[yIndexOffset];
+			const distance = Math.sqrt(dx * dx + dy * dy);
+
+			// Set velocity to move towards final position at a reasonable speed
+			const seekSpeed = 100; // pixels per second
+			if (distance > 0) {
+				state.velocities[xIndexOffset] = (dx / distance) * seekSpeed;
+				state.velocities[yIndexOffset] = (dy / distance) * seekSpeed;
+			}
+		}
+
+		// Check if ball has been seeking for too long (30 seconds) and should be erased
+		if (state.ballSeekingStartTime[i] !== -1 &&
+		    state.elapsedTime - state.ballSeekingStartTime[i] > 30) {
+			state.ballErased[i] = true;
+			// Move ball off-screen
+			state.positions[xIndexOffset] = -1000;
+			state.positions[yIndexOffset] = -1000;
+			state.velocities[xIndexOffset] = 0;
+			state.velocities[yIndexOffset] = 0;
+		}
+	}
+
+	for (let i = 0; i < n; i++) {
+		// Skip erased balls
+		if (state.ballErased[i]) continue;
+
 		const xIndexOffset = i * 2;
 		const yIndexOffset = xIndexOffset + 1;
 		const finalPosition = state.finalPositionsMap.get(i);
@@ -416,6 +487,7 @@ function updateAnimationState(
 			state.positions[yIndexOffset] = finalPosition[1];
 			state.velocities[xIndexOffset] = 0;
 			state.velocities[yIndexOffset] = 0;
+			state.ballStuck[i] = true; // Mark as stuck
 		}
 	}
 

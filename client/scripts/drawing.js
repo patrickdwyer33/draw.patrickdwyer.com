@@ -74,7 +74,25 @@ const createDrawingHandlers = (state, canvas) => ({
 	},
 
 	handleSubmit: async () => {
-		const title = "test2";
+		const titleInput = document.getElementById("drawing-title");
+		const rawTitle = titleInput?.value?.trim() || "";
+
+		if (!rawTitle) {
+			alert("Please enter a title for your drawing");
+			return;
+		}
+
+		// Sanitize title for URL safety (replace spaces with dashes, remove special chars)
+		const title = rawTitle
+			.replace(/\s+/g, "-")
+			.replace(/[^a-zA-Z0-9-_]/g, "")
+			.toLowerCase();
+
+		if (!title) {
+			alert("Please enter a valid title (letters, numbers, spaces, dashes, or underscores only)");
+			return;
+		}
+
 		await postDrawing(title, state.fillColor);
 		const url = `${window.location.origin}/simulate?title=${title}`;
 		window.location.href = url;

@@ -7,7 +7,7 @@ export default function createAnimation(fn, ...args) {
 		deltaTime = now - then;
 		then = now;
 
-		let state = fn(deltaTime, ...args);
+		let state = fn(deltaTime, now, ...args);
 		if (!state.continueAnimation) return;
 
 		requestAnimationFrame(render);
