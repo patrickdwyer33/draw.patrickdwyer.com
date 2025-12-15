@@ -13,21 +13,21 @@
 	<header class="app-header">
 		<h1>Draw</h1>
 		<nav>
-			<button id="pencil-button" type="button" aria-label="Pencil tool">
-				✏️
-			</button>
-			<button id="eraser-button" type="button" aria-label="Eraser tool">
-				🧹
-			</button>
-			<button id="clear-button" type="button" aria-label="Clear canvas">
-				🗑️
-			</button>
 			<div class="color-picker">
+				Current Color ->
 				<input type="color" id="color-picker" aria-label="Choose drawing color">
 			</div>
-			<input type="text" id="drawing-title" placeholder="Drawing title" aria-label="Drawing title">
+			<button id="pencil-button" type="button" aria-label="Pencil tool">
+				Draw
+			</button>
+			<button id="eraser-button" type="button" aria-label="Eraser tool">
+				Erase
+			</button>
+			<button id="clear-button" type="button" aria-label="Clear canvas">
+				Clear
+			</button>
 			<button id="submit-button" type="button" aria-label="Submit drawing">
-				🚀
+				Submit
 			</button>
 		</nav>
 	</header>
@@ -35,6 +35,18 @@
 	<main class="app-main">
 		<canvas id="drawing-canvas" aria-label="Drawing canvas"></canvas>
 	</main>
+
+	<!-- Title Input Modal -->
+	<div id="title-modal" class="modal" role="dialog" aria-labelledby="modal-title" aria-modal="true">
+		<div class="modal-content">
+			<h2 id="modal-title">Name Your Drawing</h2>
+			<input type="text" id="drawing-title" placeholder="Enter a title..." aria-label="Drawing title" autofocus>
+			<div class="modal-buttons">
+				<button id="modal-cancel" type="button">Cancel</button>
+				<button id="modal-submit" type="button">Submit</button>
+			</div>
+		</div>
+	</div>
 </body>
 
 </html>

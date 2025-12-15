@@ -132,6 +132,12 @@ export default async function runSimulation(canvasId, clearColor) {
 		dotSize
 	);
 
+	// Update page title with drawing name
+	const titleElement = document.getElementById("drawing-title");
+	if (titleElement && drawingInfo.title) {
+		titleElement.textContent = drawingInfo.title;
+	}
+
 	const drawingData = drawingInfo.data;
 
 	const finalPositions = drawingData.positions;

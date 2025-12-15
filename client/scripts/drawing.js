@@ -58,6 +58,14 @@ const createDrawingHandlers = (state, canvas) => ({
 	},
 
 	handleToolChange: (e) => {
+		// Remove active class from all tool buttons
+		document.querySelector("#pencil-button")?.classList.remove("active");
+		document.querySelector("#eraser-button")?.classList.remove("active");
+
+		// Add active class to clicked button
+		e.target?.classList.add("active");
+
+		// Update stroke style
 		state.ctx.strokeStyle =
 			e.target?.id === "eraser-button" ? "#000000" : state.color;
 	},
@@ -73,8 +81,21 @@ const createDrawingHandlers = (state, canvas) => ({
 		}
 	},
 
-	handleSubmit: async () => {
+	handleSubmit: () => {
+		// Show the modal
+		const modal = document.getElementById("title-modal");
 		const titleInput = document.getElementById("drawing-title");
+		if (modal) {
+			modal.classList.add("show");
+			// Clear previous input and focus
+			titleInput.value = "";
+			setTimeout(() => titleInput.focus(), 100);
+		}
+	},
+
+	handleModalSubmit: async () => {
+		const titleInput = document.getElementById("drawing-title");
+		const modal = document.getElementById("title-modal");
 		const rawTitle = titleInput?.value?.trim() || "";
 
 		if (!rawTitle) {
@@ -93,9 +114,19 @@ const createDrawingHandlers = (state, canvas) => ({
 			return;
 		}
 
+		// Hide modal
+		modal.classList.remove("show");
+
 		await postDrawing(title, state.fillColor);
 		const url = `${window.location.origin}/simulate?title=${title}`;
 		window.location.href = url;
+	},
+
+	handleModalCancel: () => {
+		const modal = document.getElementById("title-modal");
+		if (modal) {
+			modal.classList.remove("show");
+		}
 	},
 });
 
@@ -133,15 +164,42 @@ export default function setupUserDrawing(document, canvasId, clearColor) {
 	document
 		.querySelector("#clear-button")
 		.addEventListener("click", handlers.handleClear);
-	document
-		.querySelector("#color-picker")
-		.addEventListener("input", handlers.handleColorChange);
+	const colorPicker = document.querySelector("#color-picker");
+	colorPicker.addEventListener("input", handlers.handleColorChange);
+	// Set initial color to match state
+	colorPicker.value = state.color;
 
 	document.querySelector("#pencil-button").classList.add("active");
 
 	document
 		.querySelector("#submit-button")
 		.addEventListener("click", handlers.handleSubmit);
+
+	// Modal event listeners
+	document
+		.querySelector("#modal-submit")
+		.addEventListener("click", handlers.handleModalSubmit);
+	document
+		.querySelector("#modal-cancel")
+		.addEventListener("click", handlers.handleModalCancel);
+
+	// Allow Enter key to submit modal
+	document
+		.querySelector("#drawing-title")
+		.addEventListener("keypress", (e) => {
+			if (e.key === "Enter") {
+				handlers.handleModalSubmit();
+			}
+		});
+
+	// Close modal when clicking outside
+	document
+		.querySelector("#title-modal")
+		.addEventListener("click", (e) => {
+			if (e.target.id === "title-modal") {
+				handlers.handleModalCancel();
+			}
+		});
 
 	return { state, handlers };
 }

@@ -28,6 +28,14 @@ const routes = {
 				simulation.shakeItUp();
 			});
 		}
+
+		// Set up event handler for new drawing button
+		const newDrawingButton = document.getElementById("new-drawing-button");
+		if (newDrawingButton) {
+			newDrawingButton.addEventListener("click", () => {
+				window.location.href = "/";
+			});
+		}
 	},
 };
 

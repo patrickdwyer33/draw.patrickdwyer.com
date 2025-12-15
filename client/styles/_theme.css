@@ -7,19 +7,26 @@ html {
 }
 
 body {
-    background-color: hsl(20, 10%, 30%);
-    font-family: "Source Sans";
+    background-color: #4a7c59;
+    font-family: "Schoolbell";
     line-height: 1.3;
+}
+
+/* Apply Schoolbell font to form elements */
+input, button, textarea, select {
+    font-family: "Schoolbell";
+}
+
+/* Active state for tool buttons */
+button.active {
+    background-color: #007bff;
+    color: white;
+    border: 2px solid #0056b3;
 }
 
 main {
     background-color: white;
     margin: auto;
-}
-
-h1,
-h2 {
-    font-family: "Libre Baskerville";
 }
 
 h2 {
@@ -108,7 +115,7 @@ svg#sprites {
 
     li.linebreak {
         white-space: nowrap;
-        
+
         &:not(:last-child)::after {
             content: "\A";
             white-space: pre;
