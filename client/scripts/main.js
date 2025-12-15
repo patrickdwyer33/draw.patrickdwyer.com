@@ -15,11 +15,19 @@ const routes = {
 		const clearColorString = "#000000";
 		setupUserDrawing(document, canvasId, clearColorString);
 	},
-	"/simulate": () => {
+	"/simulate": async () => {
 		console.log("Simulation route");
 		const canvasId = "simulation-canvas";
 		const clearColor = [0.0, 0.0, 0.0, 1.0];
-		runSimulation(canvasId, clearColor);
+		const simulation = await runSimulation(canvasId, clearColor);
+
+		// Set up event handler for shake it up button
+		const shakeButton = document.getElementById("shake-it-up-button");
+		if (shakeButton && simulation && simulation.shakeItUp) {
+			shakeButton.addEventListener("click", () => {
+				simulation.shakeItUp();
+			});
+		}
 	},
 };
 

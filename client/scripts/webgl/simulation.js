@@ -4,6 +4,9 @@ import initShaderProgram from "/scripts/webgl/shaders.js";
 import createAnimation from "/scripts/webgl/animate.js";
 import RBush from "rbush";
 
+const MAX_BALLS = 5000;
+const VELOCITY_SCALE = 200.0;
+
 async function importShaderSource(fileName) {
 	return await fetch(fileName).then((response) => response.text());
 }
@@ -16,6 +19,58 @@ const generateDefaultColors = (n) => {
 	const yellow = [1.0, 1.0, 0.0, 1.0];
 	colors.push(...yellow);
 	return colors;
+};
+
+const downSampleDrawingData = (finalPositions, colors, maxPixels) => {
+	const currentPixels = finalPositions.length / 2;
+
+	if (currentPixels <= maxPixels) {
+		return {
+			positions: finalPositions,
+			colors: colors,
+			samplingRatio: 1.0,
+			originalPixelCount: currentPixels,
+			sampledPixelCount: currentPixels,
+		};
+	}
+
+	// Calculate sampling interval (every Nth pixel)
+	const samplingInterval = Math.ceil(currentPixels / maxPixels);
+
+	const sampledPositions = [];
+	const sampledColors = [];
+
+	for (let i = 0; i < currentPixels; i++) {
+		if (i % samplingInterval === 0) {
+			// Add position (x, y)
+			sampledPositions.push(
+				finalPositions[i * 2],
+				finalPositions[i * 2 + 1]
+			);
+
+			// Add color (r, g, b, a)
+			sampledColors.push(
+				colors[i * 4],
+				colors[i * 4 + 1],
+				colors[i * 4 + 2],
+				colors[i * 4 + 3]
+			);
+		}
+	}
+
+	console.log(
+		`Down-sampled from ${currentPixels} to ${
+			sampledPositions.length / 2
+		} pixels (every ${samplingInterval}th pixel)`
+	);
+
+	return {
+		positions: sampledPositions,
+		colors: sampledColors,
+		samplingRatio: samplingInterval,
+		originalPixelCount: currentPixels,
+		sampledPixelCount: sampledPositions.length / 2,
+	};
 };
 
 const getDrawingInfo = async (width, height, dotSize) => {
@@ -89,10 +144,16 @@ export default async function runSimulation(canvasId, clearColor) {
 
 	let colors = drawingData.colors;
 	// Ensure colors array has 4 components (RGBA) for each position
+	// Also normalize from 0-255 range to 0.0-1.0 range for WebGL
 	if (colors.length === n * 3) {
 		const rgbaColors = [];
 		for (let i = 0; i < colors.length; i += 3) {
-			rgbaColors.push(colors[i], colors[i + 1], colors[i + 2], 1.0);
+			rgbaColors.push(
+				colors[i] / 255,
+				colors[i + 1] / 255,
+				colors[i + 2] / 255,
+				1.0
+			);
 		}
 		colors = rgbaColors;
 	} else if (colors.length !== n * 4) {
@@ -101,30 +162,80 @@ export default async function runSimulation(canvasId, clearColor) {
 		);
 	}
 
+	// Apply down-sampling if needed BEFORE calculating numBalls
+	const downSampleResult = downSampleDrawingData(
+		finalPositions,
+		colors,
+		MAX_BALLS / numBallsPerDrawnPixel
+	);
+
+	// Update references to use sampled data
+	const sampledFinalPositions = downSampleResult.positions;
+	const sampledColors = downSampleResult.colors;
+	n = downSampleResult.sampledPixelCount;
+
+	// Log if down-sampling occurred
+	if (downSampleResult.samplingRatio > 1) {
+		console.log(
+			`Drawing down-sampled: ${downSampleResult.originalPixelCount} → ${downSampleResult.sampledPixelCount} pixels`
+		);
+	}
+
 	const numBalls = n * numBallsPerDrawnPixel;
 
-	// Create expanded colors array for all balls
+	console.log(
+		`Initializing simulation with ${numBalls} balls for ${n} target pixels`
+	);
+
+	// Create expanded colors array for all balls using sampled colors
 	const expandedColors = [];
 	for (let i = 0; i < n; i++) {
 		const colorIndex = i * 4;
 		for (let j = 0; j < numBallsPerDrawnPixel; j++) {
 			expandedColors.push(
-				colors[colorIndex],
-				colors[colorIndex + 1],
-				colors[colorIndex + 2],
-				colors[colorIndex + 3]
+				sampledColors[colorIndex],
+				sampledColors[colorIndex + 1],
+				sampledColors[colorIndex + 2],
+				sampledColors[colorIndex + 3]
 			);
 		}
 	}
 
+	// Generate random positions BEFORE allocating buffers
+	// This validates we can actually place this many balls
+	let initialPositions;
+	try {
+		initialPositions = generateRandomPositions(
+			numBalls,
+			gl.canvas.width,
+			gl.canvas.height,
+			dotSize
+		);
+	} catch (error) {
+		// This should rarely happen now with down-sampling, but handle gracefully
+		console.error(
+			"Failed to generate initial positions even after down-sampling:",
+			error
+		);
+		throw new Error(
+			`Unable to initialize simulation with ${numBalls} balls. The drawing may be too dense.`
+		);
+	}
+
+	// Initialize buffers (NOW safe because we validated placement)
 	const buffers = initBuffers(gl, numBalls, expandedColors);
 
+	// Create finalPositionsMap using sampled positions
 	const finalPositionsMap = new Map(
 		Array.from({ length: numBalls }, (_, i) => [
 			i,
 			[
-				finalPositions[Math.floor(i / numBallsPerDrawnPixel) * 2],
-				finalPositions[Math.floor(i / numBallsPerDrawnPixel) * 2 + 1],
+				sampledFinalPositions[
+					Math.floor(i / numBallsPerDrawnPixel) * 2
+				],
+				sampledFinalPositions[
+					Math.floor(i / numBallsPerDrawnPixel) * 2 + 1
+				],
 			],
 		])
 	);
@@ -142,13 +253,9 @@ export default async function runSimulation(canvasId, clearColor) {
 		ballErased[i] = false;
 	}
 
+	// Create state object using pre-generated initialPositions
 	const state = {
-		positions: generateRandomPositions(
-			numBalls,
-			gl.canvas.width,
-			gl.canvas.height,
-			dotSize
-		),
+		positions: initialPositions,
 		finalPositionsMap,
 		velocities: generateRandomVelocities(numBalls),
 		continueAnimation: true,
@@ -161,6 +268,12 @@ export default async function runSimulation(canvasId, clearColor) {
 		ballErased,
 		startTime: -1, // Will be set on first frame
 		elapsedTime: 0,
+		shouldShakeItUp: false, // Flag to trigger shake-up from animation loop
+	};
+
+	// Function to trigger shake-up on next animation frame
+	const shakeItUp = () => {
+		state.shouldShakeItUp = true;
 	};
 
 	createAnimation(
@@ -172,6 +285,9 @@ export default async function runSimulation(canvasId, clearColor) {
 		numBalls,
 		state
 	);
+
+	// Return the shakeItUp function so it can be called from outside
+	return { shakeItUp };
 }
 
 function generateRandomPositions(n, width, height, dotDiameter) {
@@ -183,7 +299,10 @@ function generateRandomPositions(n, width, height, dotDiameter) {
 	for (let i = 0; i - failedAttempts < n; i++) {
 		if (failedAttempts > maxFailedAttempts) {
 			throw new Error(
-				"Failed to generate random positions, too many failed attempts"
+				`Failed to place ${n} balls in the available space. ` +
+					`This should not happen after down-sampling. ` +
+					`Current failed attempts: ${failedAttempts}. ` +
+					`Consider reducing numBallsPerDrawnPixel or increasing canvas size.`
 			);
 		}
 		const x = Math.random() * (width - dotDiameter) + dotRadius;
@@ -210,7 +329,7 @@ function generateRandomVelocities(n) {
 	for (let i = 0; i < n * 2; i++) {
 		let velocity =
 			Math.max(Math.random(), 0.4) *
-			100.0 *
+			VELOCITY_SCALE *
 			(Math.random() < 0.5 ? -1.0 : 1.0);
 		velocities.push(velocity);
 	}
@@ -318,6 +437,97 @@ function updateAnimationState(
 	n,
 	state
 ) {
+	// Check if we should shake it up
+	if (state.shouldShakeItUp) {
+		console.log("Shaking it up!");
+
+		const dotRadius = state.dotSize / 2;
+		const tree = new RBush(16);
+
+		// First, add stuck and erased balls to the collision tree
+		// so new random positions don't collide with them
+		for (let i = 0; i < n; i++) {
+			if (state.ballStuck[i] || state.ballErased[i]) {
+				const x = state.positions[i * 2];
+				const y = state.positions[i * 2 + 1];
+				const bbox = {
+					minX: x - dotRadius,
+					minY: y - dotRadius,
+					maxX: x + dotRadius,
+					maxY: y + dotRadius,
+				};
+				tree.insert(bbox);
+			}
+		}
+
+		// Generate new random positions and velocities for non-stuck, non-erased balls
+		let failedAttempts = 0;
+		const maxFailedAttempts = 1000;
+
+		for (let i = 0; i < n; i++) {
+			// Skip stuck and erased balls
+			if (state.ballStuck[i] || state.ballErased[i]) {
+				continue;
+			}
+
+			// Reset timing state for this ball
+			state.ballSeekingStartTime[i] = -1;
+			// Set timeout relative to current elapsed time, not absolute
+			state.ballTimeouts[i] =
+				state.elapsedTime + (30 + Math.random() * 90);
+
+			// Generate new random position without collision
+			let placed = false;
+			while (!placed && failedAttempts < maxFailedAttempts) {
+				const x =
+					Math.random() * (gl.canvas.width - state.dotSize) +
+					dotRadius;
+				const y =
+					Math.random() * (gl.canvas.height - state.dotSize) +
+					dotRadius;
+				const bbox = {
+					minX: x - dotRadius,
+					minY: y - dotRadius,
+					maxX: x + dotRadius,
+					maxY: y + dotRadius,
+				};
+
+				if (!tree.collides(bbox)) {
+					// Place the ball
+					state.positions[i * 2] = x;
+					state.positions[i * 2 + 1] = y;
+					tree.insert(bbox);
+					placed = true;
+
+					// Generate new random velocity
+					state.velocities[i * 2] =
+						Math.max(Math.random(), 0.4) *
+						VELOCITY_SCALE *
+						(Math.random() < 0.5 ? -1.0 : 1.0);
+					state.velocities[i * 2 + 1] =
+						Math.max(Math.random(), 0.4) *
+						VELOCITY_SCALE *
+						(Math.random() < 0.5 ? -1.0 : 1.0);
+				} else {
+					failedAttempts++;
+				}
+			}
+
+			if (!placed) {
+				console.warn(
+					`Failed to place ball ${i} after ${maxFailedAttempts} attempts`
+				);
+			}
+		}
+
+		console.log(
+			`Shook up ${n} balls with ${failedAttempts} failed placement attempts`
+		);
+
+		// Reset the flag
+		state.shouldShakeItUp = false;
+	}
+
 	// Initialize start time on first frame
 	if (state.startTime === -1) {
 		state.startTime = now;
@@ -329,8 +539,8 @@ function updateAnimationState(
 	const bboxes = [];
 
 	for (let i = 0; i < n; i++) {
-		// Skip erased balls for collision detection
-		if (state.ballErased[i]) {
+		// Skip erased and stuck balls for collision detection
+		if (state.ballErased[i] || state.ballStuck[i]) {
 			bboxes.push(null);
 			continue;
 		}
@@ -368,7 +578,7 @@ function updateAnimationState(
 	}
 
 	const tree = new RBush(9);
-	tree.load(bboxes.filter(bbox => bbox !== null));
+	tree.load(bboxes.filter((bbox) => bbox !== null));
 	const foundCollisionIds = new Set();
 	for (let i = 0; i < n; i++) {
 		if (foundCollisionIds.has(i)) {
@@ -425,7 +635,10 @@ function updateAnimationState(
 		const finalPosition = state.finalPositionsMap.get(i);
 
 		// Check if timeout has passed and ball should start seeking
-		if (state.elapsedTime > state.ballTimeouts[i] && state.ballSeekingStartTime[i] === -1) {
+		if (
+			state.elapsedTime > state.ballTimeouts[i] &&
+			state.ballSeekingStartTime[i] === -1
+		) {
 			// Start seeking - change velocity to point towards final position
 			state.ballSeekingStartTime[i] = state.elapsedTime;
 
@@ -442,8 +655,10 @@ function updateAnimationState(
 		}
 
 		// Check if ball has been seeking for too long (30 seconds) and should be erased
-		if (state.ballSeekingStartTime[i] !== -1 &&
-		    state.elapsedTime - state.ballSeekingStartTime[i] > 30) {
+		if (
+			state.ballSeekingStartTime[i] !== -1 &&
+			state.elapsedTime - state.ballSeekingStartTime[i] > 30
+		) {
 			state.ballErased[i] = true;
 			// Move ball off-screen
 			state.positions[xIndexOffset] = -1000;
