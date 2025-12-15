@@ -26,6 +26,9 @@
 			<button id="clear-button" type="button" aria-label="Clear canvas">
 				Clear
 			</button>
+			<button id="find-button" type="button" aria-label="Find drawing">
+				Find
+			</button>
 			<button id="submit-button" type="button" aria-label="Submit drawing">
 				Submit
 			</button>
@@ -44,6 +47,19 @@
 			<div class="modal-buttons">
 				<button id="modal-cancel" type="button">Cancel</button>
 				<button id="modal-submit" type="button">Submit</button>
+			</div>
+		</div>
+	</div>
+
+	<!-- Find Drawing Modal -->
+	<div id="find-modal" class="modal" role="dialog" aria-labelledby="find-modal-title" aria-modal="true">
+		<div class="modal-content">
+			<h2 id="find-modal-title">Find a Drawing</h2>
+			<input type="text" id="find-drawing-title" placeholder="Enter drawing title..." aria-label="Find drawing title" autofocus>
+			<div id="find-error" class="modal-error"></div>
+			<div class="modal-buttons">
+				<button id="find-modal-cancel" type="button">Cancel</button>
+				<button id="find-modal-submit" type="button">Find</button>
 			</div>
 		</div>
 	</div>

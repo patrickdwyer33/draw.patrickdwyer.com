@@ -96,21 +96,10 @@ const createDrawingHandlers = (state, canvas) => ({
 	handleModalSubmit: async () => {
 		const titleInput = document.getElementById("drawing-title");
 		const modal = document.getElementById("title-modal");
-		const rawTitle = titleInput?.value?.trim() || "";
-
-		if (!rawTitle) {
-			alert("Please enter a title for your drawing");
-			return;
-		}
-
-		// Sanitize title for URL safety (replace spaces with dashes, remove special chars)
-		const title = rawTitle
-			.replace(/\s+/g, "-")
-			.replace(/[^a-zA-Z0-9-_]/g, "")
-			.toLowerCase();
+		const title = titleInput?.value?.trim() || "";
 
 		if (!title) {
-			alert("Please enter a valid title (letters, numbers, spaces, dashes, or underscores only)");
+			alert("Please enter a title for your drawing");
 			return;
 		}
 
@@ -118,12 +107,63 @@ const createDrawingHandlers = (state, canvas) => ({
 		modal.classList.remove("show");
 
 		await postDrawing(title, state.fillColor);
-		const url = `${window.location.origin}/simulate?title=${title}`;
+		const url = `${window.location.origin}/simulate?title=${encodeURIComponent(title)}`;
 		window.location.href = url;
 	},
 
 	handleModalCancel: () => {
 		const modal = document.getElementById("title-modal");
+		if (modal) {
+			modal.classList.remove("show");
+		}
+	},
+
+	handleFind: () => {
+		// Show the find modal
+		const modal = document.getElementById("find-modal");
+		const titleInput = document.getElementById("find-drawing-title");
+		const errorDiv = document.getElementById("find-error");
+		if (modal) {
+			modal.classList.add("show");
+			// Clear previous input, error, and focus
+			titleInput.value = "";
+			errorDiv.textContent = "";
+			setTimeout(() => titleInput.focus(), 100);
+		}
+	},
+
+	handleFindSubmit: async () => {
+		const titleInput = document.getElementById("find-drawing-title");
+		const modal = document.getElementById("find-modal");
+		const errorDiv = document.getElementById("find-error");
+		const title = titleInput?.value?.trim() || "";
+
+		if (!title) {
+			errorDiv.textContent = "Please enter a title";
+			return;
+		}
+
+		// Check if drawing exists
+		try {
+			const response = await fetch(`${window.location.origin}/api/drawings/${encodeURIComponent(title)}`);
+
+			if (response.ok) {
+				// Drawing found, navigate to simulate page
+				modal.classList.remove("show");
+				const url = `${window.location.origin}/simulate?title=${encodeURIComponent(title)}`;
+				window.location.href = url;
+			} else {
+				// Drawing not found
+				errorDiv.textContent = `No drawing found with title "${title}"`;
+			}
+		} catch (error) {
+			console.error("Error finding drawing:", error);
+			errorDiv.textContent = "Error searching for drawing. Please try again.";
+		}
+	},
+
+	handleFindCancel: () => {
+		const modal = document.getElementById("find-modal");
 		if (modal) {
 			modal.classList.remove("show");
 		}
@@ -175,7 +215,11 @@ export default function setupUserDrawing(document, canvasId, clearColor) {
 		.querySelector("#submit-button")
 		.addEventListener("click", handlers.handleSubmit);
 
-	// Modal event listeners
+	document
+		.querySelector("#find-button")
+		.addEventListener("click", handlers.handleFind);
+
+	// Title modal event listeners
 	document
 		.querySelector("#modal-submit")
 		.addEventListener("click", handlers.handleModalSubmit);
@@ -198,6 +242,32 @@ export default function setupUserDrawing(document, canvasId, clearColor) {
 		.addEventListener("click", (e) => {
 			if (e.target.id === "title-modal") {
 				handlers.handleModalCancel();
+			}
+		});
+
+	// Find modal event listeners
+	document
+		.querySelector("#find-modal-submit")
+		.addEventListener("click", handlers.handleFindSubmit);
+	document
+		.querySelector("#find-modal-cancel")
+		.addEventListener("click", handlers.handleFindCancel);
+
+	// Allow Enter key to submit find modal
+	document
+		.querySelector("#find-drawing-title")
+		.addEventListener("keypress", (e) => {
+			if (e.key === "Enter") {
+				handlers.handleFindSubmit();
+			}
+		});
+
+	// Close find modal when clicking outside
+	document
+		.querySelector("#find-modal")
+		.addEventListener("click", (e) => {
+			if (e.target.id === "find-modal") {
+				handlers.handleFindCancel();
 			}
 		});
 
@@ -262,7 +332,7 @@ const postDrawing = async (title, clearColor) => {
 	const drawingData = getDrawingData(canvas, clearColor);
 
 	try {
-		const url = `${window.location.origin}/api/drawings/${title}`;
+		const url = `${window.location.origin}/api/drawings/${encodeURIComponent(title)}`;
 		const response = await fetch(url, {
 			method: "POST",
 			headers: {

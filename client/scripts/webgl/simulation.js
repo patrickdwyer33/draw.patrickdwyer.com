@@ -88,7 +88,7 @@ const getDrawingInfo = async (width, height, dotSize) => {
 			updated_at: new Date().toISOString(),
 		};
 	}
-	const url = `${window.location.origin}/api/drawings/${title}`;
+	const url = `${window.location.origin}/api/drawings/${encodeURIComponent(title)}`;
 	const response = await fetch(url);
 	const data = await response.json();
 
@@ -134,8 +134,9 @@ export default async function runSimulation(canvasId, clearColor) {
 
 	// Update page title with drawing name
 	const titleElement = document.getElementById("drawing-title");
-	if (titleElement && drawingInfo.title) {
-		titleElement.textContent = drawingInfo.title;
+	if (titleElement) {
+		// Use display_title if available, otherwise fall back to title
+		titleElement.textContent = drawingInfo.display_title || drawingInfo.title;
 	}
 
 	const drawingData = drawingInfo.data;
