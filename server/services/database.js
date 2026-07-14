@@ -36,7 +36,34 @@ class DatabaseService {
           updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
       `);
+			this.migrateFilePathsToFilenames();
 		});
+	}
+
+	// file_path once held an absolute path, which pinned rows to the filesystem
+	// that wrote them: Docker rows ("/app/...") were unreadable on the host and
+	// vice versa. Rows now hold a bare filename resolved against DRAWINGS_DIR.
+	migrateFilePathsToFilenames() {
+		this.db.all(
+			"SELECT id, file_path FROM drawings WHERE file_path LIKE '%/%'",
+			(err, rows) => {
+				if (err) {
+					console.error("Error migrating drawing paths:", err);
+					return;
+				}
+				if (rows.length === 0) return;
+
+				for (const row of rows) {
+					this.db.run(
+						"UPDATE drawings SET file_path = ? WHERE id = ?",
+						[path.posix.basename(row.file_path), row.id]
+					);
+				}
+				console.log(
+					`Migrated ${rows.length} drawing path(s) to filenames.`
+				);
+			}
+		);
 	}
 
 	// Generic query methods
@@ -98,7 +125,7 @@ class DatabaseService {
 
 	async updateDrawingByTitle(title, newTitle, filePath) {
 		try {
-			return this.run(
+			return await this.run(
 				"UPDATE drawings SET title = ?, file_path = ?, updated_at = CURRENT_TIMESTAMP WHERE title = ?",
 				[newTitle, filePath, title]
 			);

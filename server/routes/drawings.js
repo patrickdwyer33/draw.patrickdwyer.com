@@ -9,6 +9,24 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const RATE_LIMIT_MINUTES = 5;
+const DRAWINGS_DIR =
+	process.env.DRAWINGS_DIR || path.join(__dirname, "../../data/drawings");
+
+// SQLite's CURRENT_TIMESTAMP is UTC but carries no timezone marker, which Date
+// would otherwise read as local time.
+const parseTimestamp = (timestamp) =>
+	new Date(`${timestamp.replace(" ", "T")}Z`);
+
+// Cleanup of a no longer referenced file: a missing file is already the goal.
+const removeFile = async (filename) => {
+	try {
+		await fs.unlink(path.join(DRAWINGS_DIR, filename));
+	} catch (err) {
+		if (err.code !== "ENOENT") {
+			console.error("Error removing previous drawing file:", err);
+		}
+	}
+};
 
 router.get("/:title", async (req, res) => {
 	try {
@@ -21,7 +39,10 @@ router.get("/:title", async (req, res) => {
 				.json({ error: `Drawing "${title}" not found` });
 		}
 
-		const drawingData = await fs.readFile(drawing.file_path, "utf8");
+		const drawingData = await fs.readFile(
+			path.join(DRAWINGS_DIR, drawing.file_path),
+			"utf8"
+		);
 
 		res.json({
 			title: drawing.title,
@@ -46,7 +67,7 @@ router.post("/:title", async (req, res) => {
 
 		const existingDrawing = await databaseService.getDrawingByTitle(title);
 		if (existingDrawing) {
-			const lastUpdate = new Date(existingDrawing.updated_at);
+			const lastUpdate = parseTimestamp(existingDrawing.updated_at);
 			const now = new Date();
 			const minutesSinceLastUpdate = (now - lastUpdate) / (1000 * 60);
 
@@ -62,25 +83,27 @@ router.post("/:title", async (req, res) => {
 			}
 		}
 
-		const drawingsDir = path.join(__dirname, "../../data/drawings");
-		await fs.mkdir(drawingsDir, { recursive: true });
+		await fs.mkdir(DRAWINGS_DIR, { recursive: true });
 
 		const filename = `${title}-${Date.now()}.json`;
-		const filePath = path.join(drawingsDir, filename);
-
-		await fs.writeFile(filePath, JSON.stringify(data));
+		await fs.writeFile(
+			path.join(DRAWINGS_DIR, filename),
+			JSON.stringify(data)
+		);
 
 		if (existingDrawing) {
-			await fs.unlink(existingDrawing.file_path);
-			await databaseService.updateDrawingByTitle(title, title, filePath);
+			// Point the row at the new file before removing the old one, so a
+			// failed cleanup leaves a stray file rather than a lost drawing.
+			await databaseService.updateDrawingByTitle(title, title, filename);
+			await removeFile(existingDrawing.file_path);
 		} else {
-			await databaseService.createDrawing(title, filePath);
+			await databaseService.createDrawing(title, filename);
 		}
 
 		res.json({
 			message: "Drawing saved successfully",
 			title,
-			file_path: filePath,
+			file_path: filename,
 		});
 	} catch (err) {
 		console.error("Error saving drawing:", err);
