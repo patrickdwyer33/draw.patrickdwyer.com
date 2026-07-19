@@ -1,117 +1,49 @@
 import { Router } from "express";
-import databaseService from "../services/database.js";
-import fs from "fs/promises";
-import path from "path";
-import { fileURLToPath } from "url";
+import express from "express";
+import { validateTitle } from "../../shared/title.js";
+import { decodeDrawing } from "../../shared/codec.js";
+import { headObject, putObject } from "../services/objects.js";
 
 const router = Router();
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
 const RATE_LIMIT_MINUTES = 5;
-const DRAWINGS_DIR =
-	process.env.DRAWINGS_DIR || path.join(__dirname, "../../data/drawings");
 
-// SQLite's CURRENT_TIMESTAMP is UTC but carries no timezone marker, which Date
-// would otherwise read as local time.
-const parseTimestamp = (timestamp) =>
-	new Date(`${timestamp.replace(" ", "T")}Z`);
+// Binary body: cap at 32MB (largest observed ~14MB) and parse as a raw Buffer.
+const rawBinary = express.raw({ type: "application/octet-stream", limit: "32mb" });
 
-// Cleanup of a no longer referenced file: a missing file is already the goal.
-const removeFile = async (filename) => {
-	try {
-		await fs.unlink(path.join(DRAWINGS_DIR, filename));
-	} catch (err) {
-		if (err.code !== "ENOENT") {
-			console.error("Error removing previous drawing file:", err);
-		}
-	}
-};
-
-router.get("/:title", async (req, res) => {
+// Reads are served by the CDN directly from S3 — Express is intentionally NOT in
+// the read path. Only writes are proxied (validate before durable; enforce rate
+// limit, which a presigned PUT could not).
+router.post("/:title", rawBinary, async (req, res) => {
 	try {
 		const { title } = req.params;
-		const drawing = await databaseService.getDrawingByTitle(title);
-
-		if (!drawing) {
-			return res
-				.status(404)
-				.json({ error: `Drawing "${title}" not found` });
+		try {
+			validateTitle(title);
+			decodeDrawing(req.body.buffer.slice(req.body.byteOffset, req.body.byteOffset + req.body.byteLength));
+		} catch (e) {
+			return res.status(400).json({ error: e.message });
 		}
 
-		const drawingData = await fs.readFile(
-			path.join(DRAWINGS_DIR, drawing.file_path),
-			"utf8"
-		);
-
-		res.json({
-			title: drawing.title,
-			data: JSON.parse(drawingData),
-			created_at: drawing.created_at,
-			updated_at: drawing.updated_at,
-		});
-	} catch (err) {
-		console.error("Error getting drawing:", err);
-		res.status(500).json({ error: "Failed to get drawing" });
-	}
-});
-
-router.post("/:title", async (req, res) => {
-	try {
-		const { title } = req.params;
-		const data = req.body;
-
-		if (!data) {
-			return res.status(400).json({ error: "Drawing data is required" });
-		}
-
-		const existingDrawing = await databaseService.getDrawingByTitle(title);
-		if (existingDrawing) {
-			const lastUpdate = parseTimestamp(existingDrawing.updated_at);
-			const now = new Date();
-			const minutesSinceLastUpdate = (now - lastUpdate) / (1000 * 60);
-
-			if (minutesSinceLastUpdate < RATE_LIMIT_MINUTES) {
-				const minutesToWait = Math.ceil(
-					RATE_LIMIT_MINUTES - minutesSinceLastUpdate
-				);
+		const existing = await headObject(title);
+		if (existing) {
+			const mins = (Date.now() - existing.lastModified.getTime()) / 60000;
+			if (mins < RATE_LIMIT_MINUTES) {
+				const wait = Math.ceil(RATE_LIMIT_MINUTES - mins);
 				return res.status(429).json({
-					error: `Please wait ${minutesToWait} more minute${
-						minutesToWait === 1 ? "" : "s"
-					} before updating this drawing again`,
+					error: `Please wait ${wait} more minute${wait === 1 ? "" : "s"} before updating this drawing again`,
 				});
 			}
 		}
 
-		await fs.mkdir(DRAWINGS_DIR, { recursive: true });
-
-		const filename = `${title}-${Date.now()}.json`;
-		await fs.writeFile(
-			path.join(DRAWINGS_DIR, filename),
-			JSON.stringify(data)
-		);
-
-		if (existingDrawing) {
-			// Point the row at the new file before removing the old one, so a
-			// failed cleanup leaves a stray file rather than a lost drawing.
-			await databaseService.updateDrawingByTitle(title, title, filename);
-			await removeFile(existingDrawing.file_path);
-		} else {
-			await databaseService.createDrawing(title, filename);
-		}
-
-		res.json({
-			message: "Drawing saved successfully",
-			title,
-			file_path: filename,
-		});
+		await putObject(title, req.body);
+		res.json({ message: "Drawing saved successfully", title });
 	} catch (err) {
 		console.error("Error saving drawing:", err);
-		if (err.message.includes("already exists")) {
-			res.status(409).json({ error: err.message });
-		} else {
-			res.status(500).json({ error: "Failed to save drawing" });
+		// Distinguish credential/config failures from transient S3 errors — they
+		// fail identically but mean opposite things (see substrate lessons).
+		if (err.name === "CredentialsProviderError" || err.name === "AccessDenied") {
+			return res.status(503).json({ error: "Storage unavailable (credentials)" });
 		}
+		res.status(503).json({ error: "Failed to save drawing" });
 	}
 });
 
