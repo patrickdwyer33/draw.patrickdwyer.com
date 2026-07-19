@@ -26,7 +26,7 @@ if (ENV === "development") {
 	const __dirname = path.dirname(fileURLToPath(import.meta.url));
 	const dist = path.join(__dirname, "../client/dist");
 	app.use(express.static(dist));
-	app.get("*", (_req, res) => res.sendFile(path.join(dist, "index.html")));
+	app.use((_req, res) => res.sendFile(path.join(dist, "index.html")));
 }
 
 app.listen(PORT, HOST, () => console.log(`Server running at ${HOST}:${PORT} (${ENV}`));
