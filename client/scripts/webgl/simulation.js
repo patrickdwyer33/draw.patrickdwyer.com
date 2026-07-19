@@ -3,6 +3,8 @@ import initBuffers from "/scripts/webgl/buffers.js";
 import initShaderProgram from "/scripts/webgl/shaders.js";
 import createAnimation from "/scripts/webgl/animate.js";
 import RBush from "rbush";
+import { decodeDrawing } from "/shared/codec.js";
+import { objectsBase } from "/scripts/utils/objects-host.js";
 
 const MAX_BALLS = 5000;
 const VELOCITY_SCALE = 200.0;
@@ -74,25 +76,38 @@ const downSampleDrawingData = (finalPositions, colors, maxPixels) => {
 };
 
 const getDrawingInfo = async (width, height, dotSize) => {
+	const randomDrawing = () => ({
+		title: "Random Drawing",
+		data: {
+			positions: generateRandomPositions(1000, width, height, dotSize),
+			colors: generateDefaultColors(1000),
+		},
+		created_at: new Date().toISOString(),
+		updated_at: new Date().toISOString(),
+	});
+
 	const urlParams = new URLSearchParams(window.location.search);
 	const title = urlParams.get("title");
 	if (!title) {
-		const n = 1000;
-		return {
-			title: "Random Drawing",
-			data: {
-				positions: generateRandomPositions(n, width, height, dotSize),
-				colors: generateDefaultColors(n),
-			},
-			created_at: new Date().toISOString(),
-			updated_at: new Date().toISOString(),
-		};
+		return randomDrawing();
 	}
-	const url = `${window.location.origin}/api/drawings/${encodeURIComponent(title)}`;
-	const response = await fetch(url);
-	const data = await response.json();
 
-	return data;
+	const base = objectsBase() || window.location.origin;
+	const url = `${base}/draw/public/drawings/${encodeURIComponent(title)}.bin`;
+	const response = await fetch(url);
+	if (!response.ok) {
+		// Fall back to the random drawing if the title is missing.
+		return randomDrawing();
+	}
+	const buf = await response.arrayBuffer();
+	const { positions, colors } = decodeDrawing(buf);
+	const lastModified = response.headers.get("last-modified");
+	return {
+		title,
+		data: { positions, colors },
+		created_at: lastModified || new Date().toISOString(),
+		updated_at: lastModified || new Date().toISOString(),
+	};
 };
 
 export default async function runSimulation(canvasId, clearColor) {

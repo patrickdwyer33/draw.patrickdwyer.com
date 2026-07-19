@@ -1,5 +1,6 @@
 import { pipe } from "/scripts/utils/fp.js";
 import { encodeDrawing } from "/shared/codec.js";
+import { objectsBase } from "/scripts/utils/objects-host.js";
 
 export const createDrawingCanvasContext = (
 	canvas,
@@ -146,7 +147,9 @@ const createDrawingHandlers = (state, canvas) => ({
 
 		// Check if drawing exists
 		try {
-			const response = await fetch(`${window.location.origin}/api/drawings/${encodeURIComponent(title)}`);
+			const base = objectsBase() || window.location.origin;
+			const url = `${base}/draw/public/drawings/${encodeURIComponent(title)}.bin`;
+			const response = await fetch(url, { method: "GET" });
 
 			if (response.ok) {
 				// Drawing found, navigate to simulate page
