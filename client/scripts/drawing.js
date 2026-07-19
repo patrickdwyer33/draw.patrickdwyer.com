@@ -1,4 +1,5 @@
 import { pipe } from "/scripts/utils/fp.js";
+import { encodeDrawing } from "/shared/codec.js";
 
 export const createDrawingCanvasContext = (
 	canvas,
@@ -330,24 +331,17 @@ const postDrawing = async (title, clearColor) => {
 	}
 
 	const drawingData = getDrawingData(canvas, clearColor);
+	const body = encodeDrawing(drawingData);
 
-	try {
-		const url = `${window.location.origin}/api/drawings/${encodeURIComponent(title)}`;
-		const response = await fetch(url, {
-			method: "POST",
-			headers: {
-				"Content-Type": "application/json",
-			},
-			body: JSON.stringify(drawingData),
-		});
-
-		if (!response.ok) {
-			throw new Error(`HTTP error! status: ${response.status}`);
-		}
-
-		return await response.json();
-	} catch (error) {
-		console.error("Error posting drawing:", error);
-		throw error;
+	const url = `${window.location.origin}/api/drawings/${encodeURIComponent(title)}`;
+	const response = await fetch(url, {
+		method: "POST",
+		headers: { "Content-Type": "application/octet-stream" },
+		body,
+	});
+	if (!response.ok) {
+		const msg = await response.json().catch(() => ({}));
+		throw new Error(msg.error || `HTTP error! status: ${response.status}`);
 	}
+	return await response.json();
 };

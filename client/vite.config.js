@@ -44,11 +44,13 @@ export default defineConfig({
 			allowedHeaders: ["Content-Type", "Authorization"],
 			credentials: true,
 		},
+		fs: { allow: ["..", "../shared"] },
 	},
 
 	resolve: {
 		alias: {
 			client: "/client",
+			"/shared": new URL("../shared", import.meta.url).pathname,
 		},
 	},
 });
