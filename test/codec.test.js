@@ -36,3 +36,11 @@ test("decode rejects length mismatch (short and long)", () => {
 	longer.set(new Uint8Array(buf));
 	assert.throws(() => decodeDrawing(longer.buffer), /length/i);
 });
+
+test("round-trips zero points", () => {
+	const buf = encodeDrawing({ positions: [], colors: [] });
+	assert.equal(buf.byteLength, HEADER_BYTES);
+	const decoded = decodeDrawing(buf);
+	assert.equal(decoded.positions.length, 0);
+	assert.equal(decoded.colors.length, 0);
+});

@@ -1,10 +1,18 @@
 // Binary drawing container v1. Browser + Node (pure ArrayBuffer/DataView).
 // Layout: 'DRAW' | u8 version | 3 reserved | u32LE pointCount | 4 reserved
-//         | f32LE positions[2n] | u8 colors[3n].  16-byte header = 4-aligned so
-// new Float32Array(buf, 16, ...) needs no copy.
+//         | f32LE positions[2n] | u8 colors[3n].  16-byte header = 4-aligned;
+// encodeDrawing creates zero-copy views (new Float32Array(buf, 16, ...).set()),
+// while decodeDrawing copies out explicitly so callers own standalone arrays.
 export const MAGIC = 0x44524157; // 'DRAW' big-endian
 export const VERSION = 1;
 export const HEADER_BYTES = 16;
+
+// The zero-copy paths (new Float32Array over the buffer, and bulk .set) rely on
+// the host being little-endian, which the wire format mandates ("Float32 LE").
+// Every real browser/Node runtime is little-endian; assert it loudly rather than
+// silently emitting big-endian floats on the theoretical exception.
+const _probe = new Uint8Array(new Uint32Array([1]).buffer);
+if (_probe[0] !== 1) throw new Error("codec requires a little-endian host");
 
 export function encodeDrawing({ positions, colors }) {
 	const n = positions.length / 2;
