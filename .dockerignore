@@ -1,11 +1,6 @@
-client
 node_modules
+data
 dist
-server
-.cursorignore
-.gitignore
+dev-dist
 .git
-.vscode
-deploy.sh
-package-lock.json
-README.md
+.DS_Store

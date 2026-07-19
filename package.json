@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "docker run --init -it -e NODE_ENV=development -p 3000:3000 -p 24678:24678 -v $(pwd)/client:/app/client -v $(pwd)/server:/app/server -v $(pwd)/data:/app/data draw.patrickdwyer.com:latest",
     "start": "NODE_ENV=production node server/index.js",
-    "build": "vite build",
+    "build": "vite build client",
     "preview": "vite preview",
     "test": "node --test"
   },
