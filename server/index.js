@@ -29,4 +29,4 @@ if (ENV === "development") {
 	app.use((_req, res) => res.sendFile(path.join(dist, "index.html")));
 }
 
-app.listen(PORT, HOST, () => console.log(`Server running at ${HOST}:${PORT} (${ENV}`));
+app.listen(PORT, HOST, () => console.log(`Server running at ${HOST}:${PORT} (${ENV})`));
