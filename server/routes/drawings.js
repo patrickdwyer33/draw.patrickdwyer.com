@@ -18,6 +18,9 @@ router.post("/:title", rawBinary, async (req, res) => {
 		const { title } = req.params;
 		try {
 			validateTitle(title);
+			if (!Buffer.isBuffer(req.body)) {
+				return res.status(400).json({ error: "Drawing data is required (send application/octet-stream)" });
+			}
 			decodeDrawing(req.body.buffer.slice(req.body.byteOffset, req.body.byteOffset + req.body.byteLength));
 		} catch (e) {
 			return res.status(400).json({ error: e.message });
