@@ -255,17 +255,18 @@ export default async function runSimulation(canvasId, clearColor) {
 		ballFinalPositions[i * 2 + 1] = sampledFinalPositions[src + 1];
 	}
 
-	// Generate random timeouts between 30-120 seconds for each ball
-	const ballTimeouts = new Array(numBalls);
-	const ballSeekingStartTime = new Array(numBalls);
-	const ballStuck = new Array(numBalls);
-	const ballErased = new Array(numBalls);
+	// Per-ball state, all typed and index-parallel. Every one of these is touched
+	// for every ball on every frame in updateAnimationState's loops, so they get the
+	// same treatment as `positions`. The two flags are Uint8Array (0/1) rather than
+	// arrays of booleans; truthiness tests work unchanged.
+	const ballTimeouts = new Float32Array(numBalls);
+	const ballSeekingStartTime = new Float32Array(numBalls);
+	const ballStuck = new Uint8Array(numBalls);
+	const ballErased = new Uint8Array(numBalls);
 
 	for (let i = 0; i < numBalls; i++) {
 		ballTimeouts[i] = 30 + Math.random() * 90; // 30-120 seconds
 		ballSeekingStartTime[i] = -1; // -1 means not seeking yet
-		ballStuck[i] = false;
-		ballErased[i] = false;
 	}
 
 	// Collision grid geometry. Cell == the collision diameter: the smallest size for
@@ -381,14 +382,17 @@ function generateRandomPositions(n, width, height, dotDiameter) {
 	return positions;
 }
 
+// Float32Array, not a plain Array: this is read and written for every ball on
+// every frame alongside `positions` (which is already typed). A plain Array of
+// doubles costs more memory traffic per element and denies the JIT the fixed
+// element type it can generate straight-line float loads for.
 function generateRandomVelocities(n) {
-	const velocities = [];
+	const velocities = new Float32Array(n * 2);
 	for (let i = 0; i < n * 2; i++) {
-		let velocity =
+		velocities[i] =
 			Math.max(Math.random(), 0.4) *
 			VELOCITY_SCALE *
 			(Math.random() < 0.5 ? -1.0 : 1.0);
-		velocities.push(velocity);
 	}
 	return velocities;
 }
@@ -423,7 +427,7 @@ function rescatterBalls(state, gl, n, { reviveErased }) {
 	for (let i = 0; i < n; i++) {
 		if (state.ballStuck[i]) continue; // stuck balls stay frozen
 		if (state.ballErased[i] && !reviveErased) continue; // leave dead unless reviving
-		if (reviveErased) state.ballErased[i] = false; // bring the ball back into play
+		if (reviveErased) state.ballErased[i] = 0; // bring the ball back into play
 
 		// Reset timing so the ball bounces, then seeks again after a fresh timeout.
 		state.ballSeekingStartTime[i] = -1;
@@ -753,7 +757,7 @@ function updateAnimationState(
 			state.ballSeekingStartTime[i] !== -1 &&
 			state.elapsedTime - state.ballSeekingStartTime[i] > 30
 		) {
-			state.ballErased[i] = true;
+			state.ballErased[i] = 1;
 			// Move ball off-screen
 			state.positions[xIndexOffset] = -1000;
 			state.positions[yIndexOffset] = -1000;
@@ -795,7 +799,7 @@ function updateAnimationState(
 			state.positions[yIndexOffset] = state.finalPositions[yIndexOffset];
 			state.velocities[xIndexOffset] = 0;
 			state.velocities[yIndexOffset] = 0;
-			state.ballStuck[i] = true; // Mark as stuck
+			state.ballStuck[i] = 1; // Mark as stuck
 		}
 	}
 
