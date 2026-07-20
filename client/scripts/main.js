@@ -29,6 +29,14 @@ const routes = {
 			});
 		}
 
+		// Set up event handler for refill balls button (revives erased balls)
+		const refillButton = document.getElementById("refill-balls-button");
+		if (refillButton && simulation && simulation.refillBalls) {
+			refillButton.addEventListener("click", () => {
+				simulation.refillBalls();
+			});
+		}
+
 		// Set up event handler for new drawing button
 		const newDrawingButton = document.getElementById("new-drawing-button");
 		if (newDrawingButton) {

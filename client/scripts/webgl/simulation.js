@@ -288,11 +288,15 @@ export default async function runSimulation(canvasId, clearColor) {
 		startTime: -1, // Will be set on first frame
 		elapsedTime: 0,
 		shouldShakeItUp: false, // Flag to trigger shake-up from animation loop
+		shouldRefillBalls: false, // Flag to trigger refill from animation loop
 	};
 
-	// Function to trigger shake-up on next animation frame
+	// Functions to trigger shake-up / refill on the next animation frame
 	const shakeItUp = () => {
 		state.shouldShakeItUp = true;
+	};
+	const refillBalls = () => {
+		state.shouldRefillBalls = true;
 	};
 
 	createAnimation(
@@ -305,8 +309,8 @@ export default async function runSimulation(canvasId, clearColor) {
 		state
 	);
 
-	// Return the shakeItUp function so it can be called from outside
-	return { shakeItUp };
+	// Return the control functions so they can be called from outside
+	return { shakeItUp, refillBalls };
 }
 
 function generateRandomPositions(n, width, height, dotDiameter) {
@@ -353,6 +357,81 @@ function generateRandomVelocities(n) {
 		velocities.push(velocity);
 	}
 	return velocities;
+}
+
+// Re-scatter non-stuck balls to fresh random positions/velocities/timeouts, avoiding
+// collisions with balls that must stay put. Shared by SHAKE IT UP and REFILL BALLS.
+//   reviveErased=false (shake): leave erased balls dead; reserve their spots too.
+//   reviveErased=true  (refill): revive erased balls (they re-enter play), so only
+//     stuck balls are reserved. Stuck balls are NEVER touched either way.
+function rescatterBalls(state, gl, n, { reviveErased }) {
+	const dotRadius = state.dotSize / 2;
+	const tree = new RBush(16);
+
+	// Reserve the positions of balls we must not overlap.
+	for (let i = 0; i < n; i++) {
+		if (state.ballStuck[i] || (state.ballErased[i] && !reviveErased)) {
+			const x = state.positions[i * 2];
+			const y = state.positions[i * 2 + 1];
+			tree.insert({
+				minX: x - dotRadius,
+				minY: y - dotRadius,
+				maxX: x + dotRadius,
+				maxY: y + dotRadius,
+			});
+		}
+	}
+
+	let failedAttempts = 0;
+	const maxFailedAttempts = 1000;
+	let count = 0;
+
+	for (let i = 0; i < n; i++) {
+		if (state.ballStuck[i]) continue; // stuck balls stay frozen
+		if (state.ballErased[i] && !reviveErased) continue; // leave dead unless reviving
+		if (reviveErased) state.ballErased[i] = false; // bring the ball back into play
+
+		// Reset timing so the ball bounces, then seeks again after a fresh timeout.
+		state.ballSeekingStartTime[i] = -1;
+		state.ballTimeouts[i] = state.elapsedTime + (30 + Math.random() * 90);
+
+		let placed = false;
+		while (!placed && failedAttempts < maxFailedAttempts) {
+			const x =
+				Math.random() * (gl.canvas.width - state.dotSize) + dotRadius;
+			const y =
+				Math.random() * (gl.canvas.height - state.dotSize) + dotRadius;
+			const bbox = {
+				minX: x - dotRadius,
+				minY: y - dotRadius,
+				maxX: x + dotRadius,
+				maxY: y + dotRadius,
+			};
+			if (!tree.collides(bbox)) {
+				state.positions[i * 2] = x;
+				state.positions[i * 2 + 1] = y;
+				tree.insert(bbox);
+				placed = true;
+				count++;
+				state.velocities[i * 2] =
+					Math.max(Math.random(), 0.4) *
+					VELOCITY_SCALE *
+					(Math.random() < 0.5 ? -1.0 : 1.0);
+				state.velocities[i * 2 + 1] =
+					Math.max(Math.random(), 0.4) *
+					VELOCITY_SCALE *
+					(Math.random() < 0.5 ? -1.0 : 1.0);
+			} else {
+				failedAttempts++;
+			}
+		}
+		if (!placed) {
+			console.warn(
+				`Failed to place ball ${i} after ${maxFailedAttempts} attempts`
+			);
+		}
+	}
+	return { count, failedAttempts };
 }
 
 function drawScene(gl, programInfo, buffers, clearColor, n, state) {
@@ -456,95 +535,26 @@ function updateAnimationState(
 	n,
 	state
 ) {
-	// Check if we should shake it up
+	// SHAKE IT UP and REFILL BALLS both re-scatter non-stuck balls (see
+	// rescatterBalls). REFILL additionally REVIVES erased balls, giving pixels that
+	// failed to fill another chance to stick — so fidelity accumulates across refills.
 	if (state.shouldShakeItUp) {
-		console.log("Shaking it up!");
-
-		const dotRadius = state.dotSize / 2;
-		const tree = new RBush(16);
-
-		// First, add stuck and erased balls to the collision tree
-		// so new random positions don't collide with them
-		for (let i = 0; i < n; i++) {
-			if (state.ballStuck[i] || state.ballErased[i]) {
-				const x = state.positions[i * 2];
-				const y = state.positions[i * 2 + 1];
-				const bbox = {
-					minX: x - dotRadius,
-					minY: y - dotRadius,
-					maxX: x + dotRadius,
-					maxY: y + dotRadius,
-				};
-				tree.insert(bbox);
-			}
-		}
-
-		// Generate new random positions and velocities for non-stuck, non-erased balls
-		let failedAttempts = 0;
-		const maxFailedAttempts = 1000;
-
-		for (let i = 0; i < n; i++) {
-			// Skip stuck and erased balls
-			if (state.ballStuck[i] || state.ballErased[i]) {
-				continue;
-			}
-
-			// Reset timing state for this ball
-			state.ballSeekingStartTime[i] = -1;
-			// Set timeout relative to current elapsed time, not absolute
-			state.ballTimeouts[i] =
-				state.elapsedTime + (30 + Math.random() * 90);
-
-			// Generate new random position without collision
-			let placed = false;
-			while (!placed && failedAttempts < maxFailedAttempts) {
-				const x =
-					Math.random() * (gl.canvas.width - state.dotSize) +
-					dotRadius;
-				const y =
-					Math.random() * (gl.canvas.height - state.dotSize) +
-					dotRadius;
-				const bbox = {
-					minX: x - dotRadius,
-					minY: y - dotRadius,
-					maxX: x + dotRadius,
-					maxY: y + dotRadius,
-				};
-
-				if (!tree.collides(bbox)) {
-					// Place the ball
-					state.positions[i * 2] = x;
-					state.positions[i * 2 + 1] = y;
-					tree.insert(bbox);
-					placed = true;
-
-					// Generate new random velocity
-					state.velocities[i * 2] =
-						Math.max(Math.random(), 0.4) *
-						VELOCITY_SCALE *
-						(Math.random() < 0.5 ? -1.0 : 1.0);
-					state.velocities[i * 2 + 1] =
-						Math.max(Math.random(), 0.4) *
-						VELOCITY_SCALE *
-						(Math.random() < 0.5 ? -1.0 : 1.0);
-				} else {
-					failedAttempts++;
-				}
-			}
-
-			if (!placed) {
-				console.warn(
-					`Failed to place ball ${i} after ${maxFailedAttempts} attempts`
-				);
-			}
-		}
-
+		const { count, failedAttempts } = rescatterBalls(state, gl, n, {
+			reviveErased: false,
+		});
 		console.log(
-			`Shook up ${n} balls with ${failedAttempts} failed placement attempts`
+			`Shook up ${count} balls with ${failedAttempts} failed placement attempts`
 		);
-
-		// Reset the flag
 		state.shouldShakeItUp = false;
+	}
+	if (state.shouldRefillBalls) {
+		const { count, failedAttempts } = rescatterBalls(state, gl, n, {
+			reviveErased: true,
+		});
+		console.log(
+			`Refilled ${count} balls with ${failedAttempts} failed placement attempts`
+		);
+		state.shouldRefillBalls = false;
 	}
 
 	// Initialize start time on first frame

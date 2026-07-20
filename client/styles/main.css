@@ -15,6 +15,7 @@ canvas {
 
 header {
     display: flex;
+    align-items: center; /* vertically center the title with the buttons */
     h1 {
         margin: 0 1rem;
     }
