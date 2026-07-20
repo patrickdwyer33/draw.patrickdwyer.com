@@ -15,9 +15,11 @@ canvas {
 
 header {
     display: flex;
-    align-items: center; /* vertically center the title with the buttons */
+    /* Default (stretch) is kept so the buttons fill the header height as before.
+       Only the title opts out, centering itself vertically. */
     h1 {
         margin: 0 1rem;
+        align-self: center;
     }
     div.color-picker {
         input {
