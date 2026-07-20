@@ -33,7 +33,52 @@ Instrumenting the frame gap (`?debug`) answered in one run what four profiles co
 not, because a ~10 s-interval event is nearly impossible to catch in a 9 s recording
 and averages to nothing across it.
 
-- [ ] **Confirm with the user that the jump is gone** on `5bf63ab`.
+- [x] **Confirmed fixed.** The sim now resumes smoothly from where it was instead of
+      lurching. That symptom is gone.
+
+---
+
+## Active: a SECOND stutter, and the app is measurably not causing it
+
+Distinct from the clock bug: it stutters while watching continuously, never
+switching away.
+
+### Round 8 — frame delivery is perfect (2026-07-20)
+
+~13,500 frames / ~110 s of `[frames]` summaries, every line identical in shape:
+
+```
+median=8.3ms (~120Hz)  min≈7.3  p95≈9.3  max≈9.4  |  dropped: 0 (0.0%)  |  >2.5x: 0
+```
+
+**Zero dropped frames. Max interval 9.4 ms.** Combined with `prevStep ≈ 1 ms`:
+
+- our physics costs ~1 ms of an 8.3 ms budget (120 Hz display — ProMotion)
+- the browser delivers a frame every 8.3 ms without ever being late
+- **no main-thread event exists that could cause a visible stutter.** A JS hitch
+  would have to appear as an interval above 9.4 ms; across 110 s, none did.
+
+Also settles the EMA question **against** the earlier hypothesis that smoothing was
+making drops worse. Intervals vary 7.2–9.4 ms around a hard 8.3 ms median — that is
+rAF *timestamp* jitter on a vsync-locked display, not real variance. Feeding true
+elapsed time would inject that noise into the motion; constant dt is correct. And it
+is moot at the magnitudes involved: 1 ms at 200 px/s is 0.2 px. **No pacing change
+made** — the data does not support one.
+
+Everything left is downstream of handing off the frame: compositor, GPU, or display.
+JS instrumentation is structurally blind to that half of the pipeline.
+
+- [ ] **DevTools → ⋮ → More tools → Rendering → "Frame Rendering Stats"** — overlays
+      the compositor's *presented* frame rate and dropped-frame count. Watch it
+      through a stutter.
+- [ ] Cross-check in **Safari or Firefox**. Smooth there → Chrome's compositor/GPU
+      path, not the app or the machine.
+- [ ] Cross-check **another animated WebGL page**. Stutters there too → nothing in
+      this repo is involved.
+- [ ] If it does prove GPU-side, the one app-level suspect worth testing is the
+      per-frame `gl.bufferSubData` into a buffer the GPU may still be reading, which
+      can force a driver sync. Buffer orphaning or double-buffering would be the fix.
+      **Untested and unevidenced — do not implement without measurement.**
 
 ---
 
