@@ -13,6 +13,16 @@ import { objectsBase } from "/scripts/utils/objects-host.js";
 import vertexShaderSource from "/shaders/vertex/basic.vert?raw";
 import fragmentShaderSource from "/shaders/fragment/basic.frag?raw";
 
+// Opt-in state-change diagnostics, same ?debug flag as animate.js. Frame TIMING is
+// measurably perfect (0 dropped frames in 13,500, ~1ms step), so a visible "jump"
+// has to come from the simulation STATE changing en masse in a single frame — which
+// costs nothing and arrives on time, and is therefore invisible to every timing
+// measurement. These counters test exactly that.
+const DEBUG =
+	typeof location !== "undefined" &&
+	new URLSearchParams(location.search).has("debug");
+const SPIKE = 40; // balls changing state in ONE frame before it is worth reporting
+
 const MAX_BALLS = 4000;
 const VELOCITY_SCALE = 200.0;
 
@@ -718,13 +728,20 @@ function updateAnimationState(
 	const collided = state.collided;
 	collided.fill(0);
 	const dotSizeSquared = state.dotSize ** 2; // same radius -> diameter is the threshold
+	let nCollisions = 0;
 	for (let i = 0; i < n; i++) {
 		if (!active[i] || collided[i]) continue;
 		const j = findCollidingNeighbor(state, i, dotSizeSquared);
 		if (j < 0) continue;
 		collided[j] = 1;
 		processCollision(state.positions, state.velocities, i, j);
+		nCollisions++;
 	}
+
+	// Counts of balls changing state THIS frame (see DEBUG above).
+	let nSeeking = 0;
+	let nErased = 0;
+	let nStuck = 0;
 
 	// Handle time-based behavior for balls
 	for (let i = 0; i < n; i++) {
@@ -740,6 +757,7 @@ function updateAnimationState(
 			state.ballSeekingStartTime[i] === -1
 		) {
 			// Start seeking - change velocity to point towards final position
+			nSeeking++;
 			state.ballSeekingStartTime[i] = state.elapsedTime;
 
 			const dx = state.finalPositions[xIndexOffset] - state.positions[xIndexOffset];
@@ -760,6 +778,7 @@ function updateAnimationState(
 			state.elapsedTime - state.ballSeekingStartTime[i] > 30
 		) {
 			state.ballErased[i] = 1;
+			nErased++;
 			// Move ball off-screen
 			state.positions[xIndexOffset] = -1000;
 			state.positions[yIndexOffset] = -1000;
@@ -802,11 +821,26 @@ function updateAnimationState(
 			state.velocities[xIndexOffset] = 0;
 			state.velocities[yIndexOffset] = 0;
 			state.ballStuck[i] = 1; // Mark as stuck
+			nStuck++;
 		}
 	}
 
 	gl.bindBuffer(gl.ARRAY_BUFFER, buffers.positions);
 	// state.positions is already a Float32Array — upload it directly (no per-frame alloc).
+	// Report any frame where a BATCH of balls changed state at once. A shake-like
+	// visual jump means many balls moved or changed direction in a single frame; this
+	// names which mechanism did it, and how many.
+	if (
+		DEBUG &&
+		(nSeeking > SPIKE || nErased > SPIKE || nStuck > SPIKE || nCollisions > n * 0.5)
+	) {
+		console.warn(
+			`[spike] t=${state.elapsedTime.toFixed(1)}s ` +
+				`startedSeeking=${nSeeking} erased=${nErased} stuck=${nStuck} ` +
+				`collisions=${nCollisions}/${n}`
+		);
+	}
+
 	gl.bufferSubData(gl.ARRAY_BUFFER, 0, state.positions);
 
 	drawScene(gl, programInfo, buffers, clearColor, n, state);
