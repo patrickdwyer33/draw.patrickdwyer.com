@@ -101,7 +101,48 @@ have caused the gap).
   elsewhere.
 - **`prevStep` large** → it *is* our code, and we know which frame to zoom into.
 
-- [ ] **Run with `&debug` through at least one hitch and report the console lines.**
+- [x] **Ran it. The answer is: it is not our code.**
+
+### Round 6 — the simulation is exonerated (2026-07-20)
+
+```
+[hitch] t=0.2s  gap=218.3ms  prevStep=0.0ms unaccounted=218.3ms   (startup, expected)
+[hitch] t=7.8s  gap=3334.2ms prevStep=1.6ms unaccounted=3332.6ms
+[hitch] t=27.3s gap=2334.3ms prevStep=1.1ms unaccounted=2333.2ms
+[hitch] t=76.2s gap=2516.7ms prevStep=1.0ms unaccounted=2515.7ms
+```
+
+**`prevStep` is ~1.0–1.6 ms.** The simulation now costs about 1 ms of a 16.7 ms
+frame budget — roughly 6%. Five rounds of optimization are done; there is no
+meaningful CPU left to remove from this loop.
+
+**The freezes are 2–3 SECONDS with our code not running.** `requestAnimationFrame`
+is not being called at all during them. Nothing in this app can cause that while it
+holds the main thread for a millisecond at a time. The intervals are also irregular
+(7.6 s, 19.5 s, 48.9 s apart), which does not fit a GC cadence.
+
+Remaining candidates are all outside the app:
+
+1. **Tab occlusion / visibility throttling** — Chrome stops rAF for hidden or
+   occluded pages, by design.
+2. **Compositor or GPU-process stall** — the GPU track ran solid green for entire
+   recordings and has never been explained. On a Mac, a discrete/integrated GPU
+   switch can freeze a WebGL context for seconds.
+3. **System CPU contention** — worth controlling for: the agent session driving this
+   work has been running `npm run build`, AWS CLI calls, `kubectl`, and background
+   polling loops on the same machine, some of it concurrent with testing.
+
+- [ ] **Re-run with `&debug` and report the new fields** (`visibility`, `focus`,
+      `drift`). These distinguish all three:
+      - `visibility=hidden` or `focus=false` → occlusion; expected behaviour, not a bug
+      - `drift≈0` with `visibility=visible` → browser was awake and withheld the
+        frame → compositor/GPU stall or CPU starvation
+      - `drift` large → rAF itself was being throttled
+- [ ] Control the experiment: run it with nothing else heavy on the machine (no
+      builds, no deploys in flight) and the window fully visible and focused.
+- [ ] Still unexplained: the **solid-green GPU track**. Check the canvas backing
+      store size — `devicePixelRatio` on a retina display can make a "full screen"
+      canvas 4x the pixels — in `client/scripts/webgl/init.js`.
 
 ### Next up
 
