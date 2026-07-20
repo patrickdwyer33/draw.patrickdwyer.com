@@ -272,9 +272,14 @@ export default async function runSimulation(canvasId, clearColor) {
 		ballErased[i] = false;
 	}
 
-	// Create state object using pre-generated initialPositions
+	// Create state object using pre-generated initialPositions.
+	// positions is a Float32Array (fixed length = numBalls*2) so the per-frame GPU
+	// upload can pass it straight to bufferSubData with no `new Float32Array(...)`
+	// allocation each frame — less garbage, fewer GC pauses (and thus fewer stutters).
+	// All the per-frame math uses index access (positions[i*2]), which works on a
+	// typed array unchanged.
 	const state = {
-		positions: initialPositions,
+		positions: new Float32Array(initialPositions),
 		finalPositionsMap,
 		velocities: generateRandomVelocities(numBalls),
 		continueAnimation: true,
@@ -736,7 +741,8 @@ function updateAnimationState(
 	}
 
 	gl.bindBuffer(gl.ARRAY_BUFFER, buffers.positions);
-	gl.bufferSubData(gl.ARRAY_BUFFER, 0, new Float32Array(state.positions));
+	// state.positions is already a Float32Array — upload it directly (no per-frame alloc).
+	gl.bufferSubData(gl.ARRAY_BUFFER, 0, state.positions);
 
 	drawScene(gl, programInfo, buffers, clearColor, n, state);
 
