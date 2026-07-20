@@ -33,6 +33,37 @@ bundle and reading the exact `line:column` the profiler points at. No guessing.
 - [x] **One-diameter cells + intrusive linked-list bucketing** (`0b308d3`) — bounds query cost under clustering
 - [x] `finalPositionsMap` (`Map<number,[x,y]>`) → flat `Float32Array` — was 2 hash lookups + 2 derefs per ball per frame
 
+### Round 4 — the actual periodic hitch (2026-07-20)
+
+**Reported symptom, which reframed everything:** *"super smooth for a while on
+startup and then like 10 seconds in it does a big stutter, but just one frame jump,
+and then it's mostly good again."* Also reproduces **in incognito with extensions
+disabled**, so the Claude-in-Chrome wrapper is not the cause (it is still real
+overhead on the frame path, just not this).
+
+An isolated hitch every ~10s with smooth stretches between is not a throughput
+problem — average frame cost cannot produce it. It is the signature of a **major GC
+pause**, which meant something was still allocating steadily.
+
+**Found it:** `processCollision` returned a fresh `[v1x, v1y, v2x, v2y]` array that
+the caller destructured — **one allocation per colliding pair per frame**, thousands
+per second. Most died young, but steady promotion out of the young generation is
+exactly what schedules a periodic major GC. Fixed by writing results directly into
+`velocities`. Also hoisted `cos(phi)`/`sin(phi)`, which were each recomputed 4x.
+
+Swept the whole per-frame path afterwards; the only other allocation was
+`gl.clearColor(...clearColor)` (spread builds an iterator each frame), also removed.
+`updateAnimationState`, `buildCollisionGrid`, `findCollidingNeighbor`,
+`distanceToLineSegment` and `processCollision` now all scan clean — **the frame
+should be allocation-free**.
+
+- [x] `processCollision` writes in place instead of returning an array
+- [x] Hoist repeated `Math.cos`/`Math.sin` in `processCollision`
+- [x] Remove the `clearColor` spread
+- [ ] **Verify:** record with the **Memory** checkbox enabled. A flat/sawtooth-free
+      heap line confirms it. If the heap still climbs, something allocates that the
+      static scan missed.
+
 ### Next up
 
 - [ ] **Typed arrays for the remaining per-ball state.** `positions` is a `Float32Array`

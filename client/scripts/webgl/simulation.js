@@ -537,7 +537,10 @@ function findCollidingNeighbor(state, i, dotSizeSquared) {
 }
 
 function drawScene(gl, programInfo, buffers, clearColor, n, state) {
-	gl.clearColor(...clearColor);
+	// Indexed rather than spread: `...clearColor` builds an iterator on every frame.
+	// One small allocation per frame is nothing next to what processCollision used to
+	// do, but the goal here is a genuinely allocation-free frame, so it goes too.
+	gl.clearColor(clearColor[0], clearColor[1], clearColor[2], clearColor[3]);
 	gl.clear(gl.COLOR_BUFFER_BIT);
 
 	setPositionAttribute(gl, buffers, programInfo);
@@ -704,24 +707,7 @@ function updateAnimationState(
 		const j = findCollidingNeighbor(state, i, dotSizeSquared);
 		if (j < 0) continue;
 		collided[j] = 1;
-		const xIndexOffset = i * 2;
-		const yIndexOffset = xIndexOffset + 1;
-		const xIndexOffsetCollision = j * 2;
-		const yIndexOffsetCollision = xIndexOffsetCollision + 1;
-		const [vx1, vy1, vx2, vy2] = processCollision(
-			state.positions[xIndexOffset],
-			state.positions[yIndexOffset],
-			state.velocities[xIndexOffset],
-			state.velocities[yIndexOffset],
-			state.positions[xIndexOffsetCollision],
-			state.positions[yIndexOffsetCollision],
-			state.velocities[xIndexOffsetCollision],
-			state.velocities[yIndexOffsetCollision]
-		);
-		state.velocities[xIndexOffset] = vx1;
-		state.velocities[yIndexOffset] = vy1;
-		state.velocities[xIndexOffsetCollision] = vx2;
-		state.velocities[yIndexOffsetCollision] = vy2;
+		processCollision(state.positions, state.velocities, i, j);
 	}
 
 	// Handle time-based behavior for balls
@@ -812,39 +798,56 @@ function updateAnimationState(
 	return state;
 }
 
-function processCollision(x1, y1, v1x, v1y, x2, y2, v2x, v2y) {
-	// Calculate line between
-	// Calculate angle between og x axis and line between
-	// Find coordinates of v1 and v2 in new coordinate system
-	// Swap x components
-	// Convert back to original coordinate system
-	// Return new velocities
-	const xlineBetween = x1 - x2;
-	const ylineBetween = y1 - y2;
-	const phi = Math.atan2(ylineBetween, xlineBetween);
-	// First check to make sure that the balls are moving towards each other
-	// If they're not return early so the balls don't get stuck
+// Resolve an elastic collision between balls i and j: rotate into the frame of the
+// line between them, swap the components along that line, rotate back. Results are
+// written straight back into `velocities`.
+//
+// This used to take 8 scalars and RETURN a fresh [v1x, v1y, v2x, v2y] array, which
+// the caller destructured. That allocated one short-lived array per colliding pair
+// per frame -- thousands a second. Most died in the young generation, but enough
+// got promoted to trigger a major GC every so often, and that pause is the periodic
+// one-frame hitch: smooth for ~10s, one big stutter, smooth again. Writing in place
+// removes the last per-frame allocation in the simulation.
+//
+// Also hoists cos(phi)/sin(phi), which were each being recomputed four times.
+function processCollision(positions, velocities, i, j) {
+	const ix = i * 2;
+	const iy = ix + 1;
+	const jx = j * 2;
+	const jy = jx + 1;
+
+	const v1x = velocities[ix];
+	const v1y = velocities[iy];
+	const v2x = velocities[jx];
+	const v2y = velocities[jy];
+
+	const xlineBetween = positions[ix] - positions[jx];
+	const ylineBetween = positions[iy] - positions[jy];
+
+	// Only resolve if the balls are approaching. If they are already separating,
+	// leave the velocities alone so they don't get stuck to each other.
+	// p1 heads toward p2 if v1 opposes lineBetween; p2 heads toward p1 if v2 follows it.
 	const dotProductv1 = v1x * xlineBetween + v1y * ylineBetween;
 	const dotProductv2 = v2x * xlineBetween + v2y * ylineBetween;
-	// p1 heading toward p2 if v1 in opposite direction of lineBetween
-	// p2 heading towards p1 if v2 in direction of lineBetween
-	if (dotProductv1 > 0 && dotProductv2 < 0) {
-		return [v1x, v1y, v2x, v2y];
-	}
-	// Convert to new coordinate system and swap components
-	const v1xPrime = v1x * Math.cos(phi) + v1y * Math.sin(phi); // v1 x in rotated frame
-	const v1yPrime = -v1x * Math.sin(phi) + v1y * Math.cos(phi); // v1 y in rotated frame
-	const v2xPrime = v2x * Math.cos(phi) + v2y * Math.sin(phi); // v2 x in rotated frame
-	const v2yPrime = -v2x * Math.sin(phi) + v2y * Math.cos(phi); // v2 y in rotated frame
+	if (dotProductv1 > 0 && dotProductv2 < 0) return;
 
-	// Swap x components (parallel to collision line)
+	const phi = Math.atan2(ylineBetween, xlineBetween);
+	const cos = Math.cos(phi);
+	const sin = Math.sin(phi);
+
+	// Into the rotated frame
+	const v1xPrime = v1x * cos + v1y * sin;
+	const v1yPrime = -v1x * sin + v1y * cos;
+	const v2xPrime = v2x * cos + v2y * sin;
+	const v2yPrime = -v2x * sin + v2y * cos;
+
+	// Swap the components parallel to the collision line
 	const v1xPrimeSwapped = v2xPrime;
 	const v2xPrimeSwapped = v1xPrime;
 
-	// Convert back to original coordinate system
-	const v1xSwap = v1xPrimeSwapped * Math.cos(phi) - v1yPrime * Math.sin(phi);
-	const v1ySwap = v1xPrimeSwapped * Math.sin(phi) + v1yPrime * Math.cos(phi);
-	const v2xSwap = v2xPrimeSwapped * Math.cos(phi) - v2yPrime * Math.sin(phi);
-	const v2ySwap = v2xPrimeSwapped * Math.sin(phi) + v2yPrime * Math.cos(phi);
-	return [v1xSwap, v1ySwap, v2xSwap, v2ySwap];
+	// Back to the original frame
+	velocities[ix] = v1xPrimeSwapped * cos - v1yPrime * sin;
+	velocities[iy] = v1xPrimeSwapped * sin + v1yPrime * cos;
+	velocities[jx] = v2xPrimeSwapped * cos - v2yPrime * sin;
+	velocities[jy] = v2xPrimeSwapped * sin + v2yPrime * cos;
 }
