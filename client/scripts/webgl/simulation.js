@@ -299,7 +299,6 @@ export default async function runSimulation(canvasId, clearColor) {
 		ballSeekingStartTime,
 		ballStuck,
 		ballErased,
-		startTime: -1, // Will be set on first frame
 		elapsedTime: 0,
 		shouldShakeItUp: false, // Flag to trigger shake-up from animation loop
 		shouldRefillBalls: false, // Flag to trigger refill from animation loop
@@ -661,10 +660,22 @@ function updateAnimationState(
 	}
 
 	// Initialize start time on first frame
-	if (state.startTime === -1) {
-		state.startTime = now;
-	}
-	state.elapsedTime = now - state.startTime;
+	// SIMULATION clock, not wall clock: accumulate the same clamped/smoothed step the
+	// physics uses, so it only advances as fast as the sim actually runs.
+	//
+	// This was `now - startTime` (wall clock), which breaks badly across any pause.
+	// Chrome stops calling rAF for an occluded window — switch to another app and
+	// come back and the gap is seconds or minutes, with document.visibilityState
+	// still reporting "visible". On the resume frame the wall clock had leapt
+	// forward, so EVERY ball whose ballTimeouts entry fell inside that window began
+	// seeking at once, and every ball whose 30s seek window had expired was erased
+	// (teleported to -1000) at once. One frame, one enormous discontinuity — the
+	// "big stutter / one frame jump" after a smooth stretch.
+	//
+	// deltaTime is already clamped to MAX_DELTA_TIME, so a pause of any length now
+	// advances the simulation by at most one frame's worth, exactly like the
+	// positions it drives.
+	state.elapsedTime += deltaTime;
 
 	const dotRadius = state.dotSize / 2;
 
