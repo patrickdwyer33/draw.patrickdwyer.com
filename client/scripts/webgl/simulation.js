@@ -244,20 +244,16 @@ export default async function runSimulation(canvasId, clearColor) {
 	// Initialize buffers (NOW safe because we validated placement)
 	const buffers = initBuffers(gl, numBalls, expandedColors);
 
-	// Create finalPositionsMap using sampled positions
-	const finalPositionsMap = new Map(
-		Array.from({ length: numBalls }, (_, i) => [
-			i,
-			[
-				sampledFinalPositions[
-					Math.floor(i / numBallsPerDrawnPixel) * 2
-				],
-				sampledFinalPositions[
-					Math.floor(i / numBallsPerDrawnPixel) * 2 + 1
-				],
-			],
-		])
-	);
+	// Each ball's target position, flat and index-parallel to `positions` (ball i is
+	// at [i*2], [i*2+1]). This was a Map<number, [x, y]>, which cost a hash lookup
+	// plus an array dereference for every ball on every frame in the seeking loops —
+	// a typed array turns both into a direct offset read.
+	const ballFinalPositions = new Float32Array(numBalls * 2);
+	for (let i = 0; i < numBalls; i++) {
+		const src = Math.floor(i / numBallsPerDrawnPixel) * 2;
+		ballFinalPositions[i * 2] = sampledFinalPositions[src];
+		ballFinalPositions[i * 2 + 1] = sampledFinalPositions[src + 1];
+	}
 
 	// Generate random timeouts between 30-120 seconds for each ball
 	const ballTimeouts = new Array(numBalls);
@@ -272,16 +268,14 @@ export default async function runSimulation(canvasId, clearColor) {
 		ballErased[i] = false;
 	}
 
-	// Collision grid geometry. Any cell size >= the collision diameter guarantees a
-	// ball's only possible partners live in its own cell or the 8 around it, so the
-	// size is a pure cost trade-off: small cells mean fewer candidates per query but
-	// a bigger clear + prefix-sum scan every frame (which is O(cells), not O(balls)).
-	// Target ~1 ball per cell — that balances the two and keeps the cell count in the
-	// same order as the ball count instead of ~30x it.
-	const gridCellSize = Math.max(
-		dotSize,
-		Math.sqrt((gl.canvas.width * gl.canvas.height) / Math.max(1, numBalls))
-	);
+	// Collision grid geometry. Cell == the collision diameter: the smallest size for
+	// which a ball's only possible partners still live in its own cell or the 8
+	// around it. Sizing cells by AVERAGE density instead (~1 ball per cell) profiled
+	// terribly — balls converge into the drawing's shape, so local density runs ~10x
+	// the average and each query ended up scanning hundreds of candidates exactly
+	// when the sim was busiest. At one diameter per cell, centres can't be closer
+	// than a cell apart, so occupancy is bounded no matter how the balls clump.
+	const gridCellSize = dotSize;
 	const gridCols = Math.max(1, Math.ceil(gl.canvas.width / gridCellSize));
 	const gridRows = Math.max(1, Math.ceil(gl.canvas.height / gridCellSize));
 	const gridCellCount = gridCols * gridRows;
@@ -294,7 +288,7 @@ export default async function runSimulation(canvasId, clearColor) {
 	// typed array unchanged.
 	const state = {
 		positions: new Float32Array(initialPositions),
-		finalPositionsMap,
+		finalPositions: ballFinalPositions,
 		velocities: generateRandomVelocities(numBalls),
 		continueAnimation: true,
 		edgeSize,
@@ -322,9 +316,12 @@ export default async function runSimulation(canvasId, clearColor) {
 		gridCellSize,
 		gridCols,
 		gridRows,
-		gridCounts: new Int32Array(gridCellCount + 1), // prefix-summed start offsets
-		gridCursor: new Int32Array(gridCellCount), // fill cursor during bucketing
-		gridItems: new Int32Array(numBalls), // ball indices, grouped by cell
+		// Cells are intrusive singly-linked lists over the ball indices: gridHead[c]
+		// is the first ball in cell c (-1 = empty) and gridNext[i] is the next ball in
+		// i's cell. Rebuilding is a memset of gridHead plus an O(1) push per ball —
+		// no prefix sum, which is what makes one-diameter cells affordable.
+		gridHead: new Int32Array(gridCellCount),
+		gridNext: new Int32Array(numBalls),
 		gridCellOf: new Int32Array(numBalls), // cached cell index per ball
 	};
 
@@ -471,26 +468,25 @@ function rescatterBalls(state, gl, n, { reviveErased }) {
 	return { count, failedAttempts };
 }
 
-// Bucket the active (moving) balls into the uniform grid via a counting sort.
-// Every array is preallocated on state and reused — zero allocation per frame.
-// After this, gridCounts[c]..gridCounts[c+1] is the slice of gridItems in cell c.
+// Bucket the active (moving) balls into the uniform grid. Every array is
+// preallocated on state and reused — zero allocation per frame. Clearing is a
+// single typed-array fill (a memset) and each insert is an O(1) push onto the
+// front of its cell's list, so the whole rebuild is O(cells + balls) with the
+// cell term being raw memory bandwidth rather than a serial dependent add chain.
 function buildCollisionGrid(state, n) {
 	const {
 		gridCols,
 		gridRows,
 		gridCellSize,
-		gridCounts,
-		gridCursor,
-		gridItems,
+		gridHead,
+		gridNext,
 		gridCellOf,
 		positions,
 		active,
 	} = state;
-	const cellCount = gridCols * gridRows;
 
-	gridCounts.fill(0);
+	gridHead.fill(-1);
 
-	// Pass 1: cache each mover's cell, count per cell (offset by 1 for the prefix sum).
 	for (let i = 0; i < n; i++) {
 		if (!active[i]) continue;
 		let cx = (positions[i * 2] / gridCellSize) | 0;
@@ -501,19 +497,8 @@ function buildCollisionGrid(state, n) {
 		else if (cy >= gridRows) cy = gridRows - 1;
 		const cell = cy * gridCols + cx;
 		gridCellOf[i] = cell;
-		gridCounts[cell + 1]++;
-	}
-
-	// Pass 2: prefix sum, so gridCounts[c] becomes cell c's start offset.
-	for (let c = 0; c < cellCount; c++) {
-		gridCounts[c + 1] += gridCounts[c];
-	}
-
-	// Pass 3: place each mover's index into its cell's slice.
-	gridCursor.set(gridCounts.subarray(0, cellCount));
-	for (let i = 0; i < n; i++) {
-		if (!active[i]) continue;
-		gridItems[gridCursor[gridCellOf[i]]++] = i;
+		gridNext[i] = gridHead[cell];
+		gridHead[cell] = i;
 	}
 }
 
@@ -521,15 +506,8 @@ function buildCollisionGrid(state, n) {
 // i, so cost tracks local density rather than total ball count — and it allocates
 // nothing (the RBush search() this replaces returned a fresh array per ball).
 function findCollidingNeighbor(state, i, dotSizeSquared) {
-	const {
-		gridCols,
-		gridRows,
-		gridCounts,
-		gridItems,
-		gridCellOf,
-		positions,
-		collided,
-	} = state;
+	const { gridCols, gridRows, gridHead, gridNext, gridCellOf, positions, collided } =
+		state;
 	const cell = gridCellOf[i];
 	const cx = cell % gridCols;
 	const cy = (cell / gridCols) | 0;
@@ -543,9 +521,7 @@ function findCollidingNeighbor(state, i, dotSizeSquared) {
 			const nx = cx + ox;
 			if (nx < 0 || nx >= gridCols) continue;
 			const c = ny * gridCols + nx;
-			const end = gridCounts[c + 1];
-			for (let k = gridCounts[c]; k < end; k++) {
-				const j = gridItems[k];
+			for (let j = gridHead[c]; j !== -1; j = gridNext[j]) {
 				if (j === i || collided[j]) continue;
 				const dx = positions[j * 2] - x;
 				const dy = positions[j * 2 + 1] - y;
@@ -751,7 +727,6 @@ function updateAnimationState(
 
 		const xIndexOffset = i * 2;
 		const yIndexOffset = xIndexOffset + 1;
-		const finalPosition = state.finalPositionsMap.get(i);
 
 		// Check if timeout has passed and ball should start seeking
 		if (
@@ -761,8 +736,8 @@ function updateAnimationState(
 			// Start seeking - change velocity to point towards final position
 			state.ballSeekingStartTime[i] = state.elapsedTime;
 
-			const dx = finalPosition[0] - state.positions[xIndexOffset];
-			const dy = finalPosition[1] - state.positions[yIndexOffset];
+			const dx = state.finalPositions[xIndexOffset] - state.positions[xIndexOffset];
+			const dy = state.finalPositions[yIndexOffset] - state.positions[yIndexOffset];
 			const distance = Math.sqrt(dx * dx + dy * dy);
 
 			// Set velocity to move towards final position at a reasonable speed
@@ -793,7 +768,6 @@ function updateAnimationState(
 
 		const xIndexOffset = i * 2;
 		const yIndexOffset = xIndexOffset + 1;
-		const finalPosition = state.finalPositionsMap.get(i);
 
 		// Calculate next position
 		const nextX =
@@ -809,16 +783,16 @@ function updateAnimationState(
 			state.positions[yIndexOffset],
 			nextX,
 			nextY,
-			finalPosition[0],
-			finalPosition[1]
+			state.finalPositions[xIndexOffset],
+			state.finalPositions[yIndexOffset]
 		);
 
 		if (distSquared > state.finalDistanceThresholdSquared) {
 			state.positions[xIndexOffset] = nextX;
 			state.positions[yIndexOffset] = nextY;
 		} else {
-			state.positions[xIndexOffset] = finalPosition[0];
-			state.positions[yIndexOffset] = finalPosition[1];
+			state.positions[xIndexOffset] = state.finalPositions[xIndexOffset];
+			state.positions[yIndexOffset] = state.finalPositions[yIndexOffset];
 			state.velocities[xIndexOffset] = 0;
 			state.velocities[yIndexOffset] = 0;
 			state.ballStuck[i] = true; // Mark as stuck
