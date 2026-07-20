@@ -140,9 +140,11 @@ Remaining candidates are all outside the app:
       - `drift` large → rAF itself was being throttled
 - [ ] Control the experiment: run it with nothing else heavy on the machine (no
       builds, no deploys in flight) and the window fully visible and focused.
-- [ ] Still unexplained: the **solid-green GPU track**. Check the canvas backing
-      store size — `devicePixelRatio` on a retina display can make a "full screen"
-      canvas 4x the pixels — in `client/scripts/webgl/init.js`.
+- [x] Checked the canvas backing store — **not** the problem.
+      `resizeCanvasToDisplaySize(canvas, multiplier)` defaults `multiplier` to 1, so
+      the drawing buffer is sized in CSS pixels and is *not* `devicePixelRatio`
+      scaled. No hidden 4x pixel cost on a retina display. The solid-green GPU track
+      remains unexplained but is not an oversized canvas.
 
 ### Next up
 
