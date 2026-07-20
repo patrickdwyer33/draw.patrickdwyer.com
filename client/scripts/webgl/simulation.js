@@ -13,7 +13,7 @@ import { objectsBase } from "/scripts/utils/objects-host.js";
 import vertexShaderSource from "/shaders/vertex/basic.vert?raw";
 import fragmentShaderSource from "/shaders/fragment/basic.frag?raw";
 
-const MAX_BALLS = 5000;
+const MAX_BALLS = 4000;
 const VELOCITY_SCALE = 200.0;
 
 const generateDefaultColors = (n) => {
@@ -294,6 +294,23 @@ export default async function runSimulation(canvasId, clearColor) {
 		elapsedTime: 0,
 		shouldShakeItUp: false, // Flag to trigger shake-up from animation loop
 		shouldRefillBalls: false, // Flag to trigger refill from animation loop
+		// Reused every frame by the collision pass so it stops allocating n bbox
+		// objects + a filtered array + an RBush tree + a Set on each frame (GC = stutter).
+		// bboxPool[i] is ball i's persistent bbox (mutated in place); activeBboxes is
+		// the reused list of non-stuck/non-erased ones handed to the tree.
+		bboxPool: Array.from({ length: numBalls }, (_, i) => ({
+			minX: 0,
+			minY: 0,
+			maxX: 0,
+			maxY: 0,
+			x: 0,
+			y: 0,
+			index: i,
+			active: false,
+		})),
+		activeBboxes: [],
+		collisionTree: new RBush(9),
+		foundCollisionIds: new Set(),
 	};
 
 	// Functions to trigger shake-up / refill on the next animation frame
@@ -570,12 +587,16 @@ function updateAnimationState(
 
 	const dotRadius = state.dotSize / 2;
 
-	const bboxes = [];
+	// Reuse persistent collision structures (see state) — no per-frame allocation.
+	const bboxes = state.bboxPool;
+	const activeBboxes = state.activeBboxes;
+	activeBboxes.length = 0;
 
 	for (let i = 0; i < n; i++) {
+		const bbox = bboxes[i]; // persistent, mutated in place (bbox.index is fixed = i)
 		// Skip erased and stuck balls for collision detection
 		if (state.ballErased[i] || state.ballStuck[i]) {
-			bboxes.push(null);
+			bbox.active = false;
 			continue;
 		}
 
@@ -599,27 +620,27 @@ function updateAnimationState(
 			state.velocities[yIndexOffset] *= -1;
 		}
 
-		const bbox = {
-			minX: x - dotRadius,
-			minY: y - dotRadius,
-			maxX: x + dotRadius,
-			maxY: y + dotRadius,
-			x,
-			y,
-			index: i,
-		};
-		bboxes.push(bbox);
+		bbox.minX = x - dotRadius;
+		bbox.minY = y - dotRadius;
+		bbox.maxX = x + dotRadius;
+		bbox.maxY = y + dotRadius;
+		bbox.x = x;
+		bbox.y = y;
+		bbox.active = true;
+		activeBboxes.push(bbox);
 	}
 
-	const tree = new RBush(9);
-	tree.load(bboxes.filter((bbox) => bbox !== null));
-	const foundCollisionIds = new Set();
+	const tree = state.collisionTree;
+	tree.clear();
+	tree.load(activeBboxes);
+	const foundCollisionIds = state.foundCollisionIds;
+	foundCollisionIds.clear();
 	for (let i = 0; i < n; i++) {
 		if (foundCollisionIds.has(i)) {
 			continue;
 		}
 		const bbox = bboxes[i];
-		if (!bbox) continue; // Skip erased balls
+		if (!bbox.active) continue; // Skip erased/stuck balls
 		const collisions = tree.search(bbox);
 		let collision = collisions.pop();
 		// Just handling one collision at a time for now. Will need to handle the edge case later
