@@ -23,11 +23,26 @@ const LONG_FRAME_MS = 30; // ~2 frames at 60Hz — catches single dropped frames
 // which spread a 6-element array into a call on EVERY frame — a per-frame
 // allocation sitting in the hot loop, in the one file the allocation sweep of
 // simulation.js never looked at.
+// A timer that fires independently of rendering. During a hitch it answers the one
+// question the other fields cannot: was the MAIN THREAD alive?
+//   ticks arriving normally through the gap -> the thread was fine and only
+//     RENDERING stopped. That is the compositor / GPU / vsync path, not JS.
+//   ticks missing too -> the whole thread was blocked or starved, by something
+//     outside this app (another tab in the process, an extension, the OS).
+const TIMER_MS = 100;
+let timerTicks = 0;
+if (DEBUG) {
+	setInterval(() => {
+		timerTicks++;
+	}, TIMER_MS);
+}
+
 export default function createAnimation(step) {
 	let then = 0.0;
 	let smoothedDt = 0.0;
 	let lastStepMs = 0.0;
 	let lastWall = 0.0;
+	let lastTicks = 0;
 
 	const render = (now) => {
 		now *= 0.001; // Converts to seconds
@@ -73,9 +88,13 @@ export default function createAnimation(step) {
 						`unaccounted=${(gapMs - lastStepMs).toFixed(1)}ms ` +
 						`visibility=${document.visibilityState} ` +
 						`focus=${document.hasFocus()} ` +
-						`drift=${(wallMs - gapMs).toFixed(1)}ms`
+						`drift=${(wallMs - gapMs).toFixed(1)}ms ` +
+						`timerTicks=${timerTicks - lastTicks}/${Math.round(
+							gapMs / TIMER_MS
+						)}`
 				);
 			}
+			lastTicks = timerTicks;
 			lastWall = performance.now();
 			lastStepMs = stepMs;
 		} else {

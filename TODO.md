@@ -4,7 +4,40 @@ Live working file. Updated as work lands; newest findings at the top of each sec
 
 ---
 
-## Active: simulation stutter
+## RESOLVED: simulation stutter — it was a clock bug, not a performance problem
+
+**Root cause (round 7, `5bf63ab`):** `elapsedTime` was computed as
+`now - startTime` — **wall clock**. It gates two batch behaviours: a ball starts
+seeking once `elapsedTime` passes its `ballTimeouts` entry, and a ball is erased
+(teleported to `-1000`) after seeking for 30 s.
+
+Chrome stops calling `requestAnimationFrame` for an **occluded** window — switch to
+another app and back and there is no frame for seconds or minutes, while
+`document.visibilityState` still reports `"visible"` (which is why the visibility
+flag never caught it). On the first frame after such a pause the wall clock had
+leapt forward, so **every** ball whose timeout fell inside that window started
+seeking at once and **every** ball whose seek window had expired was erased at once.
+One frame, one enormous discontinuity — precisely the reported "super smooth for a
+while, then a big stutter, just one frame jump, then mostly good again."
+
+Fixed by accumulating `deltaTime`, which is already clamped to `MAX_DELTA_TIME`, so
+a pause of any length now advances the simulation by at most one frame's worth —
+exactly like the positions it drives.
+
+**The five rounds of optimization before it were real but were not the fix.** They
+took the frame from GC-thrashing to ~1 ms of a 16.7 ms budget, and that work is
+worth keeping. But the symptom survived all of it because the symptom was never
+about cost. The lesson: a hitch that recurs on an interval and leaves smooth
+stretches between is a *discrete event*, and average frame cost cannot explain it.
+Instrumenting the frame gap (`?debug`) answered in one run what four profiles could
+not, because a ~10 s-interval event is nearly impossible to catch in a 9 s recording
+and averages to nothing across it.
+
+- [ ] **Confirm with the user that the jump is gone** on `5bf63ab`.
+
+---
+
+## History: simulation stutter investigation
 
 **Symptom:** the `/simulate` animation stutters visibly. FPS reads a solid 60 and
 the Frames track is green, so this is frame-*pacing* / cost-*spike* behaviour, not
