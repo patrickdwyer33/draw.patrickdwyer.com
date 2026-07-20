@@ -16,7 +16,7 @@ const DT_SMOOTHING = 0.1;
 const DEBUG =
 	typeof location !== "undefined" &&
 	new URLSearchParams(location.search).has("debug");
-const LONG_FRAME_MS = 50; // ~3 missed frames at 60Hz
+const LONG_FRAME_MS = 30; // ~2 frames at 60Hz — catches single dropped frames too
 
 // `step` is a closure of (deltaTime, now). It deliberately takes no extra args:
 // this used to be createAnimation(fn, ...args) calling fn(deltaTime, now, ...args),
@@ -27,6 +27,7 @@ export default function createAnimation(step) {
 	let then = 0.0;
 	let smoothedDt = 0.0;
 	let lastStepMs = 0.0;
+	let lastWall = 0.0;
 
 	const render = (now) => {
 		now *= 0.001; // Converts to seconds
@@ -54,12 +55,28 @@ export default function createAnimation(step) {
 			state = step(smoothedDt, now);
 			const stepMs = performance.now() - t0;
 			if (gapMs > LONG_FRAME_MS) {
+				// Multi-second gaps with a ~1ms step mean rAF simply was not called,
+				// which nothing inside this app can cause. These three tell us why:
+				//   visibility=hidden  -> the tab was backgrounded; rAF is throttled to
+				//                         a stop by design, and the freeze is expected.
+				//   focus=false        -> the window was behind another; Chrome can
+				//                         treat it as occluded and stop painting.
+				//   drift              -> (wall clock elapsed) - (rAF timestamp gap).
+				//                         Near zero means the browser was awake and
+				//                         genuinely withheld the frame (compositor/GPU
+				//                         stall or CPU starvation). A large value means
+				//                         rAF itself was being throttled.
+				const wallMs = performance.now() - lastWall;
 				console.warn(
 					`[hitch] t=${now.toFixed(1)}s gap=${gapMs.toFixed(1)}ms ` +
 						`prevStep=${lastStepMs.toFixed(1)}ms ` +
-						`unaccounted=${(gapMs - lastStepMs).toFixed(1)}ms`
+						`unaccounted=${(gapMs - lastStepMs).toFixed(1)}ms ` +
+						`visibility=${document.visibilityState} ` +
+						`focus=${document.hasFocus()} ` +
+						`drift=${(wallMs - gapMs).toFixed(1)}ms`
 				);
 			}
+			lastWall = performance.now();
 			lastStepMs = stepMs;
 		} else {
 			state = step(smoothedDt, now);
