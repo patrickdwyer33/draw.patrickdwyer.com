@@ -272,6 +272,20 @@ export default async function runSimulation(canvasId, clearColor) {
 		ballErased[i] = false;
 	}
 
+	// Collision grid geometry. Any cell size >= the collision diameter guarantees a
+	// ball's only possible partners live in its own cell or the 8 around it, so the
+	// size is a pure cost trade-off: small cells mean fewer candidates per query but
+	// a bigger clear + prefix-sum scan every frame (which is O(cells), not O(balls)).
+	// Target ~1 ball per cell — that balances the two and keeps the cell count in the
+	// same order as the ball count instead of ~30x it.
+	const gridCellSize = Math.max(
+		dotSize,
+		Math.sqrt((gl.canvas.width * gl.canvas.height) / Math.max(1, numBalls))
+	);
+	const gridCols = Math.max(1, Math.ceil(gl.canvas.width / gridCellSize));
+	const gridRows = Math.max(1, Math.ceil(gl.canvas.height / gridCellSize));
+	const gridCellCount = gridCols * gridRows;
+
 	// Create state object using pre-generated initialPositions.
 	// positions is a Float32Array (fixed length = numBalls*2) so the per-frame GPU
 	// upload can pass it straight to bufferSubData with no `new Float32Array(...)`
@@ -294,23 +308,24 @@ export default async function runSimulation(canvasId, clearColor) {
 		elapsedTime: 0,
 		shouldShakeItUp: false, // Flag to trigger shake-up from animation loop
 		shouldRefillBalls: false, // Flag to trigger refill from animation loop
-		// Reused every frame by the collision pass so it stops allocating n bbox
-		// objects + a filtered array + an RBush tree + a Set on each frame (GC = stutter).
-		// bboxPool[i] is ball i's persistent bbox (mutated in place); activeBboxes is
-		// the reused list of non-stuck/non-erased ones handed to the tree.
-		bboxPool: Array.from({ length: numBalls }, (_, i) => ({
-			minX: 0,
-			minY: 0,
-			maxX: 0,
-			maxY: 0,
-			x: 0,
-			y: 0,
-			index: i,
-			active: false,
-		})),
-		activeBboxes: [],
-		collisionTree: new RBush(9),
-		foundCollisionIds: new Set(),
+		// --- Collision broad-phase: a UNIFORM SPATIAL GRID, all typed arrays, reused.
+		// Replaces a per-frame RBush rebuild. Profiling showed RBush's bulk-load
+		// comparators (compareMinX/compareMinY), search(), and the GC from its node +
+		// result-array allocations dominating the frame (Major GC was the single
+		// largest self-time entry). A grid buckets balls in O(n) with a counting sort
+		// and answers "who is near me?" by walking the 3x3 neighbouring cells —
+		// no sorting, no tree nodes, and zero allocation per frame or per query.
+		// Cell size == the collision diameter, so any true collision partner is in
+		// the 3x3 block around a ball's cell.
+		active: new Uint8Array(numBalls), // 1 = moving (participates in collisions)
+		collided: new Uint8Array(numBalls), // 1 = already paired this frame
+		gridCellSize,
+		gridCols,
+		gridRows,
+		gridCounts: new Int32Array(gridCellCount + 1), // prefix-summed start offsets
+		gridCursor: new Int32Array(gridCellCount), // fill cursor during bucketing
+		gridItems: new Int32Array(numBalls), // ball indices, grouped by cell
+		gridCellOf: new Int32Array(numBalls), // cached cell index per ball
 	};
 
 	// Functions to trigger shake-up / refill on the next animation frame
@@ -456,6 +471,91 @@ function rescatterBalls(state, gl, n, { reviveErased }) {
 	return { count, failedAttempts };
 }
 
+// Bucket the active (moving) balls into the uniform grid via a counting sort.
+// Every array is preallocated on state and reused — zero allocation per frame.
+// After this, gridCounts[c]..gridCounts[c+1] is the slice of gridItems in cell c.
+function buildCollisionGrid(state, n) {
+	const {
+		gridCols,
+		gridRows,
+		gridCellSize,
+		gridCounts,
+		gridCursor,
+		gridItems,
+		gridCellOf,
+		positions,
+		active,
+	} = state;
+	const cellCount = gridCols * gridRows;
+
+	gridCounts.fill(0);
+
+	// Pass 1: cache each mover's cell, count per cell (offset by 1 for the prefix sum).
+	for (let i = 0; i < n; i++) {
+		if (!active[i]) continue;
+		let cx = (positions[i * 2] / gridCellSize) | 0;
+		let cy = (positions[i * 2 + 1] / gridCellSize) | 0;
+		if (cx < 0) cx = 0;
+		else if (cx >= gridCols) cx = gridCols - 1;
+		if (cy < 0) cy = 0;
+		else if (cy >= gridRows) cy = gridRows - 1;
+		const cell = cy * gridCols + cx;
+		gridCellOf[i] = cell;
+		gridCounts[cell + 1]++;
+	}
+
+	// Pass 2: prefix sum, so gridCounts[c] becomes cell c's start offset.
+	for (let c = 0; c < cellCount; c++) {
+		gridCounts[c + 1] += gridCounts[c];
+	}
+
+	// Pass 3: place each mover's index into its cell's slice.
+	gridCursor.set(gridCounts.subarray(0, cellCount));
+	for (let i = 0; i < n; i++) {
+		if (!active[i]) continue;
+		gridItems[gridCursor[gridCellOf[i]]++] = i;
+	}
+}
+
+// Index of one ball colliding with ball i, or -1. Only scans the 3x3 cells around
+// i, so cost tracks local density rather than total ball count — and it allocates
+// nothing (the RBush search() this replaces returned a fresh array per ball).
+function findCollidingNeighbor(state, i, dotSizeSquared) {
+	const {
+		gridCols,
+		gridRows,
+		gridCounts,
+		gridItems,
+		gridCellOf,
+		positions,
+		collided,
+	} = state;
+	const cell = gridCellOf[i];
+	const cx = cell % gridCols;
+	const cy = (cell / gridCols) | 0;
+	const x = positions[i * 2];
+	const y = positions[i * 2 + 1];
+
+	for (let oy = -1; oy <= 1; oy++) {
+		const ny = cy + oy;
+		if (ny < 0 || ny >= gridRows) continue;
+		for (let ox = -1; ox <= 1; ox++) {
+			const nx = cx + ox;
+			if (nx < 0 || nx >= gridCols) continue;
+			const c = ny * gridCols + nx;
+			const end = gridCounts[c + 1];
+			for (let k = gridCounts[c]; k < end; k++) {
+				const j = gridItems[k];
+				if (j === i || collided[j]) continue;
+				const dx = positions[j * 2] - x;
+				const dy = positions[j * 2 + 1] - y;
+				if (dx * dx + dy * dy <= dotSizeSquared) return j;
+			}
+		}
+	}
+	return -1;
+}
+
 function drawScene(gl, programInfo, buffers, clearColor, n, state) {
 	gl.clearColor(...clearColor);
 	gl.clear(gl.COLOR_BUFFER_BIT);
@@ -512,13 +612,6 @@ function setResolutionUniform(gl, programInfo, state) {
 	);
 	gl.uniform1f(programInfo.uniformLocations.uEdgeSize, state.edgeSize);
 	gl.uniform1f(programInfo.uniformLocations.dotSize, state.dotSize);
-}
-
-function positionsArrayDistSquared(positions, idx1, idx2) {
-	return (
-		(positions[idx1 * 2] - positions[idx2 * 2]) ** 2 +
-		(positions[idx1 * 2 + 1] - positions[idx2 * 2 + 1]) ** 2
-	);
 }
 
 function distanceToLineSegment(x1, y1, x2, y2, px, py) {
@@ -587,18 +680,15 @@ function updateAnimationState(
 
 	const dotRadius = state.dotSize / 2;
 
-	// Reuse persistent collision structures (see state) — no per-frame allocation.
-	const bboxes = state.bboxPool;
-	const activeBboxes = state.activeBboxes;
-	activeBboxes.length = 0;
-
+	// Wall bounce + mark which balls participate in collisions this frame.
+	const active = state.active;
 	for (let i = 0; i < n; i++) {
-		const bbox = bboxes[i]; // persistent, mutated in place (bbox.index is fixed = i)
 		// Skip erased and stuck balls for collision detection
 		if (state.ballErased[i] || state.ballStuck[i]) {
-			bbox.active = false;
+			active[i] = 0;
 			continue;
 		}
+		active[i] = 1;
 
 		const xIndexOffset = i * 2;
 		const yIndexOffset = xIndexOffset + 1;
@@ -620,57 +710,31 @@ function updateAnimationState(
 			state.velocities[yIndexOffset] *= -1;
 		}
 
-		bbox.minX = x - dotRadius;
-		bbox.minY = y - dotRadius;
-		bbox.maxX = x + dotRadius;
-		bbox.maxY = y + dotRadius;
-		bbox.x = x;
-		bbox.y = y;
-		bbox.active = true;
-		activeBboxes.push(bbox);
 	}
 
-	const tree = state.collisionTree;
-	tree.clear();
-	tree.load(activeBboxes);
-	const foundCollisionIds = state.foundCollisionIds;
-	foundCollisionIds.clear();
+	// Bucket the movers into the spatial grid, then pair each with at most one
+	// neighbour. Same "one collision per ball per frame" behaviour as before.
+	buildCollisionGrid(state, n);
+
+	const collided = state.collided;
+	collided.fill(0);
+	const dotSizeSquared = state.dotSize ** 2; // same radius -> diameter is the threshold
 	for (let i = 0; i < n; i++) {
-		if (foundCollisionIds.has(i)) {
-			continue;
-		}
-		const bbox = bboxes[i];
-		if (!bbox.active) continue; // Skip erased/stuck balls
-		const collisions = tree.search(bbox);
-		let collision = collisions.pop();
-		// Just handling one collision at a time for now. Will need to handle the edge case later
-		// Also note that weird things may happen with current setup around the walls
-		// This loop handles the fact that the bounding box checks for square overlap
-		if (!collision) continue;
-		while (
-			collision.index == i ||
-			positionsArrayDistSquared(state.positions, i, collision.index) >
-				state.dotSize ** 2 // Same radius so we can just use diameter for collision detection
-		) {
-			collision = collisions.pop();
-			if (collision === undefined) {
-				collision = false;
-				break;
-			}
-		}
-		if (!collision) continue;
-		foundCollisionIds.add(collision.index);
+		if (!active[i] || collided[i]) continue;
+		const j = findCollidingNeighbor(state, i, dotSizeSquared);
+		if (j < 0) continue;
+		collided[j] = 1;
 		const xIndexOffset = i * 2;
 		const yIndexOffset = xIndexOffset + 1;
-		const xIndexOffsetCollision = collision.index * 2;
+		const xIndexOffsetCollision = j * 2;
 		const yIndexOffsetCollision = xIndexOffsetCollision + 1;
 		const [vx1, vy1, vx2, vy2] = processCollision(
 			state.positions[xIndexOffset],
 			state.positions[yIndexOffset],
 			state.velocities[xIndexOffset],
 			state.velocities[yIndexOffset],
-			collision.x,
-			collision.y,
+			state.positions[xIndexOffsetCollision],
+			state.positions[yIndexOffsetCollision],
 			state.velocities[xIndexOffsetCollision],
 			state.velocities[yIndexOffsetCollision]
 		);
