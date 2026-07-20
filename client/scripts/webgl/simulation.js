@@ -5,13 +5,16 @@ import createAnimation from "/scripts/webgl/animate.js";
 import RBush from "rbush";
 import { decodeDrawing } from "/shared/codec.js";
 import { objectsBase } from "/scripts/utils/objects-host.js";
+// GLSL inlined at build time via Vite's ?raw suffix — the shader text becomes a
+// string in the JS bundle, so there is NO runtime fetch to miss in production.
+// (The old fetch("/shaders/...") worked only in dev, where Vite served the file
+// from source; the build never bundled it because a runtime fetch is invisible
+// to the bundler.)
+import vertexShaderSource from "/shaders/vertex/basic.vert?raw";
+import fragmentShaderSource from "/shaders/fragment/basic.frag?raw";
 
 const MAX_BALLS = 5000;
 const VELOCITY_SCALE = 200.0;
-
-async function importShaderSource(fileName) {
-	return await fetch(fileName).then((response) => response.text());
-}
 
 const generateDefaultColors = (n) => {
 	const colors = [];
@@ -112,12 +115,6 @@ const getDrawingInfo = async (width, height, dotSize) => {
 
 export default async function runSimulation(canvasId, clearColor) {
 	const gl = initGLCanvas(canvasId, clearColor);
-	const vertexShaderSource = await importShaderSource(
-		"/shaders/vertex/basic.vert"
-	);
-	const fragmentShaderSource = await importShaderSource(
-		"/shaders/fragment/basic.frag"
-	);
 	const shaderProgram = initShaderProgram(
 		gl,
 		vertexShaderSource,
