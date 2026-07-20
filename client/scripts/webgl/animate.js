@@ -37,16 +37,50 @@ if (DEBUG) {
 	}, TIMER_MS);
 }
 
+// Periodic frame-interval DISTRIBUTION. A threshold-based hitch log is blind to the
+// display it is running on: on a 120Hz panel a dropped frame is 16.7ms and a double
+// drop is 25ms, both well under a 30ms threshold and both plainly visible. The
+// median here reveals the actual refresh rate; the drop counts reveal how often the
+// browser missed one. Sampled into a preallocated array and summarised every
+// SUMMARY_FRAMES so it costs nothing per frame and never allocates.
+const SUMMARY_FRAMES = 300;
+const gapSamples = new Float32Array(SUMMARY_FRAMES);
+const gapSorted = new Float32Array(SUMMARY_FRAMES);
+let sampleIdx = 0;
+
+function summariseFrameGaps() {
+	gapSorted.set(gapSamples);
+	gapSorted.sort();
+	const median = gapSorted[SUMMARY_FRAMES >> 1];
+	const p95 = gapSorted[Math.floor(SUMMARY_FRAMES * 0.95)];
+	// Anything past 1.5x the median missed at least one display interval.
+	let dropped = 0;
+	let bad = 0;
+	for (let i = 0; i < SUMMARY_FRAMES; i++) {
+		if (gapSamples[i] > median * 1.5) dropped++;
+		if (gapSamples[i] > median * 2.5) bad++;
+	}
+	console.log(
+		`[frames] n=${SUMMARY_FRAMES} median=${median.toFixed(1)}ms ` +
+			`(~${Math.round(1000 / median)}Hz) min=${gapSorted[0].toFixed(1)} ` +
+			`p95=${p95.toFixed(1)} max=${gapSorted[SUMMARY_FRAMES - 1].toFixed(1)} | ` +
+			`dropped>1.5x: ${dropped} (${((dropped / SUMMARY_FRAMES) * 100).toFixed(1)}%) ` +
+			`| >2.5x: ${bad}`
+	);
+}
+
 export default function createAnimation(step) {
 	let then = 0.0;
 	let smoothedDt = 0.0;
 	let lastStepMs = 0.0;
 	let lastWall = 0.0;
 	let lastTicks = 0;
+	let frameCount = 0;
 
 	const render = (now) => {
 		now *= 0.001; // Converts to seconds
 		const gapMs = (now - then) * 1000; // UNCLAMPED — this is what the eye sees
+		frameCount++;
 		const rawDt = Math.min(now - then, MAX_DELTA_TIME);
 		then = now;
 
@@ -93,6 +127,15 @@ export default function createAnimation(step) {
 							gapMs / TIMER_MS
 						)}`
 				);
+			}
+			// Skip the first frame (measured against then===0, so meaningless) and
+			// the multi-second occlusion gaps, which would swamp max/p95.
+			if (frameCount > 1 && gapMs < 1000) {
+				gapSamples[sampleIdx++] = gapMs;
+				if (sampleIdx === SUMMARY_FRAMES) {
+					summariseFrameGaps();
+					sampleIdx = 0;
+				}
 			}
 			lastTicks = timerTicks;
 			lastWall = performance.now();
