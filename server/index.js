@@ -26,6 +26,12 @@ if (ENV === "development") {
 	const __dirname = path.dirname(fileURLToPath(import.meta.url));
 	const dist = path.join(__dirname, "../client/dist");
 	app.use(express.static(dist));
+	// This is a MULTI-PAGE app. The client navigates to /simulate (no extension), so
+	// map it to the built simulate.html — otherwise it falls through to the drawing
+	// page (index.html) and its simulation-canvas is absent (getContext on null).
+	// Keep in sync with vite.config.js build.rollupOptions.input.
+	app.get("/simulate", (_req, res) => res.sendFile(path.join(dist, "simulate.html")));
+	// Anything else → the drawing page.
 	app.use((_req, res) => res.sendFile(path.join(dist, "index.html")));
 }
 

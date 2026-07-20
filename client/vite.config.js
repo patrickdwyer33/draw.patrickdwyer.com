@@ -53,4 +53,17 @@ export default defineConfig({
 			"/shared": new URL("../shared", import.meta.url).pathname,
 		},
 	},
+
+	// This is a MULTI-PAGE app (drawing page + simulate page). Without listing both
+	// HTML entries here, `vite build` emits only index.html, so /simulate falls back
+	// to the drawing page in production (dev works because the Vite MPA middleware
+	// serves simulate.html from source). Keep this in sync with the server routes.
+	build: {
+		rollupOptions: {
+			input: {
+				main: new URL("./index.html", import.meta.url).pathname,
+				simulate: new URL("./simulate.html", import.meta.url).pathname,
+			},
+		},
+	},
 });
