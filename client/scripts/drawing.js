@@ -108,7 +108,15 @@ const createDrawingHandlers = (state, canvas) => ({
 		// Hide modal
 		modal.classList.remove("show");
 
-		await postDrawing(title, state.fillColor);
+		try {
+			await postDrawing(title, state.fillColor);
+		} catch (err) {
+			// postDrawing throws the server's message on a non-OK response — most
+			// commonly the 429 rate-limit ("Please wait N more minutes..."). Surface
+			// it instead of letting the promise reject unhandled (console error).
+			alert(err.message || "Failed to save drawing. Please try again.");
+			return;
+		}
 		const url = `${window.location.origin}/simulate?title=${encodeURIComponent(title)}`;
 		window.location.href = url;
 	},
