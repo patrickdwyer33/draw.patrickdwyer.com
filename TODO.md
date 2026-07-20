@@ -60,9 +60,48 @@ should be allocation-free**.
 - [x] `processCollision` writes in place instead of returning an array
 - [x] Hoist repeated `Math.cos`/`Math.sin` in `processCollision`
 - [x] Remove the `clearColor` spread
-- [ ] **Verify:** record with the **Memory** checkbox enabled. A flat/sawtooth-free
-      heap line confirms it. If the heap still climbs, something allocates that the
-      static scan missed.
+- [x] **Verified — and it was NOT enough.** Recording with Memory on showed the JS
+      heap *still* climbing steadily and dropping vertically (a live sawtooth,
+      4.1 → 5.1 MB across the window). So something was still allocating.
+
+### Round 5 — the sweep missed a file (2026-07-20)
+
+The round-4 allocation sweep only scanned `simulation.js`. The remaining per-frame
+allocation was in **`animate.js`**: `createAnimation(fn, ...args)` calling
+`fn(deltaTime, now, ...args)` spread a 6-element array into a call **on every
+frame**. Fixed by taking a closure bound once at the call site.
+
+Re-swept *every* module on the frame path (`animate`, `buffers`, `init`, `shaders`).
+All remaining hits are one-time init or debug-only. The frame path is now genuinely
+allocation-free.
+
+- [x] `createAnimation` takes a closure; no per-frame spread
+- [x] Swept all frame-path modules, not just `simulation.js`
+
+**But note the profile Summary: Scripting 1,039 ms out of 20,453 ms — the main
+thread is ~95% idle.** A "big stutter" is therefore unlikely to be our JS at all.
+
+### Round 5 instrumentation — stop guessing
+
+Added opt-in frame diagnostics behind `?debug`:
+
+    https://dev.draw.patrickdwyer.com/simulate?title=face&debug
+
+Any frame whose wall-clock gap exceeds 50 ms logs:
+
+    [hitch] t=12.3s gap=210.4ms prevStep=3.1ms unaccounted=207.3ms
+
+**`unaccounted` is the decisive number.** It is the frame gap minus the time our own
+`step()` actually ran (measured on the previous frame, which is the one that could
+have caused the gap).
+
+- **`unaccounted` large, `prevStep` small** → the stall is NOT our code. GC, the
+  compositor, or the GPU. Optimizing the sim loop further is wasted effort; look at
+  canvas backing size / `devicePixelRatio`, or accept GC and reduce heap churn
+  elsewhere.
+- **`prevStep` large** → it *is* our code, and we know which frame to zoom into.
+
+- [ ] **Run with `&debug` through at least one hitch and report the console lines.**
 
 ### Next up
 

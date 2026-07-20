@@ -334,14 +334,19 @@ export default async function runSimulation(canvasId, clearColor) {
 		state.shouldRefillBalls = true;
 	};
 
-	createAnimation(
-		updateAnimationState,
-		gl,
-		programInfo,
-		buffers,
-		clearColor,
-		numBalls,
-		state
+	// Bind the per-frame arguments once in a closure rather than handing them to
+	// createAnimation to spread on every frame (see animate.js).
+	createAnimation((deltaTime, now) =>
+		updateAnimationState(
+			deltaTime,
+			now,
+			gl,
+			programInfo,
+			buffers,
+			clearColor,
+			numBalls,
+			state
+		)
 	);
 
 	// Return the control functions so they can be called from outside

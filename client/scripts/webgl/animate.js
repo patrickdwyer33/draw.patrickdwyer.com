@@ -8,13 +8,29 @@ const MAX_DELTA_TIME = 1 / 30;
 // slower to adapt if the real frame rate changes.
 const DT_SMOOTHING = 0.1;
 
-export default function createAnimation(fn, ...args) {
+// Opt-in frame diagnostics: add ?debug to the URL (e.g. /simulate?title=face&debug).
+// Reports any frame whose wall-clock gap exceeds LONG_FRAME_MS, alongside how much
+// of that gap our own step() actually accounts for. That split is the whole point:
+// if the gap is 200ms but our step ran for 3ms, the stall is NOT our code — it is
+// GC, the compositor, or the GPU — and no amount of optimizing this loop will help.
+const DEBUG =
+	typeof location !== "undefined" &&
+	new URLSearchParams(location.search).has("debug");
+const LONG_FRAME_MS = 50; // ~3 missed frames at 60Hz
+
+// `step` is a closure of (deltaTime, now). It deliberately takes no extra args:
+// this used to be createAnimation(fn, ...args) calling fn(deltaTime, now, ...args),
+// which spread a 6-element array into a call on EVERY frame — a per-frame
+// allocation sitting in the hot loop, in the one file the allocation sweep of
+// simulation.js never looked at.
+export default function createAnimation(step) {
 	let then = 0.0;
-	let deltaTime = 0.0;
 	let smoothedDt = 0.0;
+	let lastStepMs = 0.0;
 
 	const render = (now) => {
 		now *= 0.001; // Converts to seconds
+		const gapMs = (now - then) * 1000; // UNCLAMPED — this is what the eye sees
 		const rawDt = Math.min(now - then, MAX_DELTA_TIME);
 		then = now;
 
@@ -29,9 +45,26 @@ export default function createAnimation(fn, ...args) {
 			smoothedDt === 0
 				? rawDt
 				: smoothedDt * (1 - DT_SMOOTHING) + rawDt * DT_SMOOTHING;
-		deltaTime = smoothedDt;
 
-		let state = fn(deltaTime, now, ...args);
+		let state;
+		if (DEBUG) {
+			// The gap measured on THIS frame spans from the previous frame's start,
+			// so the work that could have caused it is the PREVIOUS step, not this one.
+			const t0 = performance.now();
+			state = step(smoothedDt, now);
+			const stepMs = performance.now() - t0;
+			if (gapMs > LONG_FRAME_MS) {
+				console.warn(
+					`[hitch] t=${now.toFixed(1)}s gap=${gapMs.toFixed(1)}ms ` +
+						`prevStep=${lastStepMs.toFixed(1)}ms ` +
+						`unaccounted=${(gapMs - lastStepMs).toFixed(1)}ms`
+				);
+			}
+			lastStepMs = stepMs;
+		} else {
+			state = step(smoothedDt, now);
+		}
+
 		if (!state.continueAnimation) return;
 
 		requestAnimationFrame(render);
