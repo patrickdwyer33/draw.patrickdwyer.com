@@ -30,7 +30,20 @@ export default function initHeaderCarousel(doc = document) {
 		render();
 	};
 
-	// Which item is "in the middle" — clamped at the scroll extremes.
+	// The focus slot: the x within the row where the selected button sits.
+	//
+	// NOT the middle of the row — it sits just right of the title, so the active
+	// button reads as attached to it. Sized from the widest item so even the
+	// longest label clears the leading edge; narrower ones sit slightly further
+	// in, since items are centred on the slot.
+	const FOCUS_INSET = 6;
+	const focusX = () => {
+		let widest = 0;
+		for (const el of items) widest = Math.max(widest, el.offsetWidth);
+		return widest / 2 + FOCUS_INSET;
+	};
+
+	// Which item occupies the focus slot — clamped at the scroll extremes.
 	//
 	// There are no spacers beside the row (they were a half-row of dead space and
 	// showed up as a gap between the title and the first button), so the first and
@@ -42,11 +55,11 @@ export default function initHeaderCarousel(doc = document) {
 		if (nav.scrollLeft <= 1) return items[0];
 		if (nav.scrollLeft >= maxScroll - 1) return items[items.length - 1];
 
-		const middle = nav.scrollLeft + nav.clientWidth / 2;
+		const slot = nav.scrollLeft + focusX();
 		let closest = items[0];
 		let closestDistance = Infinity;
 		for (const el of items) {
-			const distance = Math.abs(el.offsetLeft + el.offsetWidth / 2 - middle);
+			const distance = Math.abs(el.offsetLeft + el.offsetWidth / 2 - slot);
 			if (distance < closestDistance) {
 				closestDistance = distance;
 				closest = el;
@@ -71,13 +84,15 @@ export default function initHeaderCarousel(doc = document) {
 
 	const settle = () => {
 		if (pressIndex < 0) return;
-		const landed = items.indexOf(focusFromScroll());
+		let landed = items.indexOf(focusFromScroll());
 		const delta = landed - pressIndex;
-		if (Math.abs(delta) > 1) {
-			const target = items[pressIndex + Math.sign(delta)];
-			setFocused(target);
-			centre(target);
-		}
+		// Cap the gesture at one step, then always park on the slot: with CSS
+		// snapping removed this pass is what makes the scroll come to rest
+		// somewhere deliberate rather than wherever momentum ran out.
+		if (Math.abs(delta) > 1) landed = pressIndex + Math.sign(delta);
+		const target = items[landed];
+		setFocused(target);
+		centre(target);
 		pressIndex = -1;
 	};
 
@@ -101,8 +116,11 @@ export default function initHeaderCarousel(doc = document) {
 	const sizeEdgePadding = () => {
 		const first = items[0];
 		const last = items[items.length - 1];
-		const start = Math.max(0, (nav.clientWidth - first.offsetWidth) / 2);
-		const end = Math.max(0, (nav.clientWidth - last.offsetWidth) / 2);
+		// Enough space on each side for the end items to reach the focus slot.
+		// The leading pad is now small (the slot is near the left), which also
+		// removes most of the gap the centred version left beside the swatch.
+		const start = Math.max(0, focusX() - first.offsetWidth / 2);
+		const end = Math.max(0, nav.clientWidth - focusX() - last.offsetWidth / 2);
 		nav.style.setProperty("--carousel-pad-start", `${Math.round(start)}px`);
 		nav.style.setProperty("--carousel-pad-end", `${Math.round(end)}px`);
 	};
@@ -116,7 +134,7 @@ export default function initHeaderCarousel(doc = document) {
 		// Smoothness is requested PER CALL. Putting `scroll-behavior: smooth` on
 		// the element applies it to the user's finger too, so touch momentum ends
 		// up fighting the animation for the same scrollLeft — the erratic drag.
-		const left = el.offsetLeft - (nav.clientWidth - el.offsetWidth) / 2;
+		const left = el.offsetLeft - (focusX() - el.offsetWidth / 2);
 		nav.scrollTo({ left, behavior: smooth ? "smooth" : "auto" });
 	};
 

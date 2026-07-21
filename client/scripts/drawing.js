@@ -203,10 +203,21 @@ export default function setupUserDrawing(document, canvasId, clearColor) {
 
 	const handlers = createDrawingHandlers(state, canvas);
 
-	canvas.addEventListener("mousedown", handlers.handleMouseDown);
-	canvas.addEventListener("mousemove", handlers.handleMouseMove);
-	canvas.addEventListener("mouseup", handlers.handleMouseUp);
-	canvas.addEventListener("mouseout", handlers.handleMouseUp);
+	// Pointer events, not mouse events. A finger never produces a
+	// mousedown/mousemove drag sequence — mobile browsers synthesise only a click
+	// — so drawing simply did not work on a phone; the swipe was interpreted as a
+	// scroll. Pointer events cover mouse, touch and pen with one code path, and
+	// offsetX/offsetY read the same. `touch-action: none` on the canvas (main.css)
+	// is the other half: it stops the browser claiming the gesture for panning.
+	canvas.addEventListener("pointerdown", (e) => {
+		// Capture so a stroke keeps tracking if the finger leaves the canvas.
+		canvas.setPointerCapture?.(e.pointerId);
+		handlers.handleMouseDown(e);
+	});
+	canvas.addEventListener("pointermove", handlers.handleMouseMove);
+	canvas.addEventListener("pointerup", handlers.handleMouseUp);
+	canvas.addEventListener("pointercancel", handlers.handleMouseUp);
+	canvas.addEventListener("pointerleave", handlers.handleMouseUp);
 
 	document
 		.querySelectorAll("#pencil-button,#eraser-button")

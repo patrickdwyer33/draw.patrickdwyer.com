@@ -1,5 +1,16 @@
 @import '_theme.css';
 
+/* The app is a fixed viewport: header + canvas, never a scrolling document.
+   Without this a swipe on the canvas pans/bounces the page instead of drawing,
+   and on iOS the rubber-band overscroll fights every stroke. */
+html,
+body {
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+    overscroll-behavior: none;
+}
+
 header {
     height: 5vh;
 }
@@ -11,6 +22,9 @@ main {
 canvas {
     width: 100%;
     height: 100%;
+    /* Stop the browser claiming touch gestures for panning/zooming so the
+       pointer events in drawing.js actually receive the drag. */
+    touch-action: none;
 }
 
 header {
@@ -112,24 +126,12 @@ header nav.is-carousel {
        dragging feel erratic. Programmatic centring passes behavior:'smooth' to
        scrollTo() instead. */
 
-    /* Make the scroll DISCRETE: one swipe advances one button rather than
-       flinging past the whole row. `scroll-snap-stop: always` forbids the scroll
-       from skipping over a snap point, so momentum is arrested at the very next
-       one no matter how hard the flick.
-
-       This only works if EVERY item can actually reach the centre. A snap point
-       outside the scroll range is unreachable, and snap-stop then skips that
-       item entirely — which is why Draw and Find were being jumped over: to
-       centre Draw the browser needed a negative scrollLeft, since only a 34px
-       swatch sits to its left. How many items this affects depends on their
-       widths, not their position, so excluding just :first-child/:last-child
-       was never enough.
-
-       The edge padding below (sized in JS to exactly half the row minus half
-       the end item) creates that range. It is the reason a gap appears beside
-       the end buttons at the extremes: that space is what makes them reachable
-       at all, and four unreachable buttons is a worse trade. */
-    scroll-snap-type: x mandatory;
+    /* No CSS scroll snapping. It can only align an item to the start, centre or
+       end of the scroller, and the focus slot here is a custom point just right
+       of the title — not expressible. header-carousel.js settles the scroll
+       itself, which also gives exact one-button-per-swipe regardless of the
+       uneven step sizes that varying label lengths produce. */
+    touch-action: pan-x;
     /* Set by header-carousel.js to (rowWidth - endItemWidth) / 2 so the first
        and last items can be scrolled to the middle. Falls back to a plain inset
        before measurement. */
@@ -137,8 +139,10 @@ header nav.is-carousel {
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
     /* Fade both edges so the row reads as scrollable rather than clipped. */
-    -webkit-mask-image: linear-gradient(to right, transparent, #000 10px, #000 calc(100% - 10px), transparent);
-    mask-image: linear-gradient(to right, transparent, #000 10px, #000 calc(100% - 10px), transparent);
+    /* Fade only the trailing edge: the focus slot sits at the leading edge, so a
+       fade there would dim the very button that is selected. */
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+    mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
 }
 
 header nav.is-carousel::-webkit-scrollbar {
@@ -151,13 +155,6 @@ header nav.is-carousel > * {
     transform: scale(0.88);
     opacity: 0.5;
     transition: transform 0.18s ease, opacity 0.18s ease;
-}
-
-/* Every item is a snap target now that the edge padding makes them all
-   reachable. scroll-snap-stop:always is what makes a flick advance exactly one. */
-header nav.is-carousel > * {
-    scroll-snap-align: center;
-    scroll-snap-stop: always;
 }
 
 header nav.is-carousel > .is-centered {
