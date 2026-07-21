@@ -41,6 +41,16 @@ const routes = {
 			});
 		}
 
+		// Speed control. The label IS the state — there is no other indication of
+		// the current rate, and a button that silently cycles would leave you
+		// guessing which of three speeds you are on.
+		const speedButton = document.getElementById("speed-button");
+		if (speedButton && simulation && simulation.cycleSpeed) {
+			speedButton.addEventListener("click", () => {
+				speedButton.textContent = `${simulation.cycleSpeed()}\u00d7`;
+			});
+		}
+
 		// Set up event handler for new drawing button
 		const newDrawingButton = document.getElementById("new-drawing-button");
 		if (newDrawingButton) {

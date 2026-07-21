@@ -40,33 +40,34 @@ and averages to nothing across it.
 
 ## Remaining work
 
+Order agreed 2026-07-21: prod cutover first, then `vpc-cni`, then the rest.
+
 ### Worth doing
 
-- [ ] **Prod cutover for `draw.patrickdwyer.com`** — the only substantial item.
+- [ ] **1. Prod cutover for `draw.patrickdwyer.com`** — the only substantial item.
       DNS for `draw` + `objects`, the prod Cloudflare Transform Rule (Request
       header, *not* Response), and committing `platform-gitops/apps/draw-prod.yaml`
       (deliberately uncommitted). Dev has been stable for days; nothing blocks this
       but the decision to do it.
-- [ ] **Bring the Playwright touch harness into the repo as a real test.** Needs
+- [ ] **3. Bring the Playwright touch harness into the repo as a real test.** Needs
       `playwright` as a dev dependency. It caught three defects `npm test`
       structurally cannot see, all in the same class: code that behaves correctly
       with a mouse and wrongly under a finger, because the browser cancels pointer
       events when it takes over a pan. Scripts currently live only in the session
       scratchpad and will be lost.
-- [ ] **`platform-gitops/deploy` masks AWS errors as "tag not found".** The
+- [ ] **4. `platform-gitops/deploy` masks AWS errors as "tag not found".** The
       `describe-images` check pipes stderr to `/dev/null`, so expired credentials, a
       wrong region, or a network failure all report `tag '<sha>' not found in ECR
       repo draw`. Hit twice during this work, in exactly the moment a straight
       answer was needed.
-- [ ] **CI builds are not reproducible.** `package-lock.json` is both gitignored and
+- [ ] **5. CI builds are not reproducible.** `package-lock.json` is both gitignored and
       dockerignored, so every Docker build resolves dependencies fresh — the CI
       bundle hash differs from a local build of identical source. Benign so far, but
       a breaking transitive update would land silently.
 
 ### Small / cosmetic
 
-- [ ] White-thresholding of antialiased grey balls
-- [ ] `vpc-cni` addon drift reconcile on the cluster
+- [ ] **2. `vpc-cni` addon drift** reconcile on the cluster
 
 ### Explicitly NOT doing
 
@@ -147,5 +148,4 @@ construction. Touch emulation found both in minutes.
 - [ ] **Prod cutover for `draw.patrickdwyer.com`**: DNS for `draw` + `objects`,
       the prod Cloudflare Transform Rule (Request header, *not* Response), and
       committing `platform-gitops/apps/draw-prod.yaml` (deliberately uncommitted today).
-- [ ] White-thresholding of antialiased grey balls
 - [ ] `vpc-cni` addon drift reconcile on the cluster

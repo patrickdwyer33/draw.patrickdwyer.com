@@ -373,23 +373,43 @@ export default async function runSimulation(canvasId, clearColor) {
 		state.shouldRefillBalls = true;
 	};
 
+	// Playback rate as SUBSTEPS PER FRAME, not a deltaTime multiplier.
+	//
+	// Scaling dt would be one line, but it makes every integration step larger, so
+	// balls travel further between collision checks and can pass straight through
+	// each other and through walls — the grid only ever sees before/after
+	// positions. Running the same-sized step N times keeps collision fidelity
+	// identical to 1x; it speeds the simulation up rather than fast-forwarding it.
+	const SPEEDS = [1, 2, 4];
+	let speedIndex = 0;
+	const cycleSpeed = () => {
+		speedIndex = (speedIndex + 1) % SPEEDS.length;
+		return SPEEDS[speedIndex];
+	};
+
 	// Bind the per-frame arguments once in a closure rather than handing them to
 	// createAnimation to spread on every frame (see animate.js).
-	createAnimation((deltaTime, now) =>
-		updateAnimationState(
-			deltaTime,
-			now,
-			gl,
-			programInfo,
-			buffers,
-			clearColor,
-			numBalls,
-			state
-		)
-	);
+	createAnimation((deltaTime, now) => {
+		const substeps = SPEEDS[speedIndex];
+		let result;
+		for (let i = 0; i < substeps; i++) {
+			result = updateAnimationState(
+				deltaTime,
+				now,
+				gl,
+				programInfo,
+				buffers,
+				clearColor,
+				numBalls,
+				state,
+				i === substeps - 1 // draw only the state that will actually be seen
+			);
+		}
+		return result;
+	});
 
 	// Return the control functions so they can be called from outside
-	return { shakeItUp, refillBalls };
+	return { shakeItUp, refillBalls, cycleSpeed };
 }
 
 function generateRandomPositions(n, width, height, dotDiameter) {
@@ -679,7 +699,8 @@ function updateAnimationState(
 	buffers,
 	clearColor,
 	n,
-	state
+	state,
+	draw = true
 ) {
 	// SHAKE IT UP and REFILL BALLS both re-scatter non-stuck balls (see
 	// rescatterBalls). REFILL additionally REVIVES erased balls, giving pixels that
@@ -880,9 +901,13 @@ function updateAnimationState(
 		);
 	}
 
-	gl.bufferSubData(gl.ARRAY_BUFFER, 0, state.positions);
-
-	drawScene(gl, programInfo, buffers, clearColor, n, state);
+	// Intermediate substeps skip the GPU entirely — nobody sees a frame that is
+	// immediately overwritten, and uploading each one would multiply the only
+	// genuinely expensive part of the frame.
+	if (draw) {
+		gl.bufferSubData(gl.ARRAY_BUFFER, 0, state.positions);
+		drawScene(gl, programInfo, buffers, clearColor, n, state);
+	}
 
 	return state;
 }
