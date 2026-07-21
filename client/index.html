@@ -51,6 +51,15 @@
 		</div>
 	</div>
 
+	<!-- Loading overlay: covers the gap between submitting and the next page
+	     rendering, which spans a network round-trip AND a full navigation. -->
+	<div id="loading-modal" class="modal" role="status" aria-live="polite">
+		<div class="modal-content loading-content">
+			<span class="spinner" aria-hidden="true"></span>
+			<p id="loading-message">Saving your drawing…</p>
+		</div>
+	</div>
+
 	<!-- Find Drawing Modal -->
 	<div id="find-modal" class="modal" role="dialog" aria-labelledby="find-modal-title" aria-modal="true">
 		<div class="modal-content">

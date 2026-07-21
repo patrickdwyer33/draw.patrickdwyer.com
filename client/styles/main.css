@@ -391,3 +391,42 @@ header nav .color-picker input[type="color"]::-moz-color-swatch {
     background: #f4a09a;
     border: 1px solid #d9756a;
 }
+
+/* Loading overlay. Reuses .modal for the backdrop and centring; only the inner
+   layout and the spinner are new. */
+.loading-content {
+    display: flex;
+    align-items: center;
+    gap: 0.9rem;
+    width: auto;
+    max-width: 22rem;
+    padding: 1.1rem 1.4rem;
+}
+
+.loading-content p {
+    margin: 0;
+    color: #333;
+}
+
+.spinner {
+    flex: 0 0 auto;
+    width: 22px;
+    height: 22px;
+    border: 3px solid #00000018;
+    border-top-color: #007bff;
+    border-radius: 50%;
+    animation: spinner-rotate 0.8s linear infinite;
+}
+
+@keyframes spinner-rotate {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Motion here is decorative — the message already conveys the state. */
+@media (prefers-reduced-motion: reduce) {
+    .spinner {
+        animation-duration: 2.4s;
+    }
+}

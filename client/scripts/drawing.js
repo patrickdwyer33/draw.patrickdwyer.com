@@ -56,6 +56,21 @@ const applyTool = (state) => {
 	state.ctx.lineWidth = erasing ? state.eraserWidth : state.lineWidth;
 };
 
+// Loading overlay for actions that end in a navigation.
+//
+// Deliberately NOT hidden on success: submit and find both finish with
+// window.location.href, and the current page stays on screen until the next one
+// renders. Hiding it early would leave a dead-looking canvas for the slowest
+// part of the wait — the navigation itself.
+const showLoading = (doc, message) => {
+	const modal = doc.getElementById("loading-modal");
+	if (!modal) return;
+	doc.getElementById("loading-message").textContent = message;
+	modal.classList.add("show");
+};
+
+const hideLoading = (doc) => doc.getElementById("loading-modal")?.classList.remove("show");
+
 const createDrawingHandlers = (state, canvas) => ({
 	handleMouseDown: (e) => {
 		state.isDrawing = true;
@@ -122,10 +137,12 @@ const createDrawingHandlers = (state, canvas) => ({
 
 		// Hide modal
 		modal.classList.remove("show");
+		showLoading(document, "Saving your drawing…");
 
 		try {
 			await postDrawing(title, state.fillColor);
 		} catch (err) {
+			hideLoading(document);
 			// postDrawing throws the server's message on a non-OK response — most
 			// commonly the 429 rate-limit ("Please wait N more minutes..."). Surface
 			// it instead of letting the promise reject unhandled (console error).
@@ -177,6 +194,7 @@ const createDrawingHandlers = (state, canvas) => ({
 			if (response.ok) {
 				// Drawing found, navigate to simulate page
 				modal.classList.remove("show");
+				showLoading(document, "Loading drawing…");
 				const url = `${window.location.origin}/simulate?title=${encodeURIComponent(title)}`;
 				window.location.href = url;
 			} else {
@@ -185,6 +203,7 @@ const createDrawingHandlers = (state, canvas) => ({
 			}
 		} catch (error) {
 			console.error("Error finding drawing:", error);
+			hideLoading(document);
 			errorDiv.textContent = "Error searching for drawing. Please try again.";
 		}
 	},
@@ -255,6 +274,10 @@ export default function setupUserDrawing(document, canvasId, clearColor) {
 	colorPicker.addEventListener("input", handlers.handleColorChange);
 	// Set initial color to match state
 	colorPicker.value = state.color;
+
+	// Returning via Back restores this page from the bfcache exactly as it was
+	// unloaded — mid-navigation, overlay still up. Nothing else would clear it.
+	window.addEventListener("pageshow", (e) => e.persisted && hideLoading(document));
 
 	document.querySelector("#pencil-button").classList.add("active");
 
