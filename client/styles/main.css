@@ -113,19 +113,27 @@ header nav.is-carousel {
        scrollTo() instead. */
 
     /* Make the scroll DISCRETE: one swipe advances one button rather than
-       flinging past the whole row. `scroll-snap-stop: always` on the items below
-       is what does it — it forbids the scroll from skipping over a snap point,
-       so momentum is arrested at the very next one no matter how hard the flick.
+       flinging past the whole row. `scroll-snap-stop: always` forbids the scroll
+       from skipping over a snap point, so momentum is arrested at the very next
+       one no matter how hard the flick.
 
-       Proximity, not mandatory, and the END items are deliberately excluded
-       from snapping below: a centre-aligned snap point needs space beside the
-       item to be reachable, and the first and last have none. Making them snap
-       targets is exactly what previously left them unreachable. Excluded, the
-       scroll rests freely at both extremes while the middle still arrests. */
-    scroll-snap-type: x proximity;
-    /* Inset so an end item at rest clears the edge fade below rather than
-       sitting half-dissolved against the title. */
-    padding-inline: 14px;
+       This only works if EVERY item can actually reach the centre. A snap point
+       outside the scroll range is unreachable, and snap-stop then skips that
+       item entirely — which is why Draw and Find were being jumped over: to
+       centre Draw the browser needed a negative scrollLeft, since only a 34px
+       swatch sits to its left. How many items this affects depends on their
+       widths, not their position, so excluding just :first-child/:last-child
+       was never enough.
+
+       The edge padding below (sized in JS to exactly half the row minus half
+       the end item) creates that range. It is the reason a gap appears beside
+       the end buttons at the extremes: that space is what makes them reachable
+       at all, and four unreachable buttons is a worse trade. */
+    scroll-snap-type: x mandatory;
+    /* Set by header-carousel.js to (rowWidth - endItemWidth) / 2 so the first
+       and last items can be scrolled to the middle. Falls back to a plain inset
+       before measurement. */
+    padding-inline: var(--carousel-pad-start, 14px) var(--carousel-pad-end, 14px);
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
     /* Fade both edges so the row reads as scrollable rather than clipped. */
@@ -145,9 +153,9 @@ header nav.is-carousel > * {
     transition: transform 0.18s ease, opacity 0.18s ease;
 }
 
-/* Snap targets exclude the first and last item — see the note above.
-   scroll-snap-stop:always is what makes a flick advance exactly one button. */
-header nav.is-carousel > *:not(:first-child):not(:last-child) {
+/* Every item is a snap target now that the edge padding makes them all
+   reachable. scroll-snap-stop:always is what makes a flick advance exactly one. */
+header nav.is-carousel > * {
     scroll-snap-align: center;
     scroll-snap-stop: always;
 }

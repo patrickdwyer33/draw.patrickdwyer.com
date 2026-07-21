@@ -63,6 +63,21 @@ export default function initHeaderCarousel(doc = document) {
 		});
 	};
 
+	// Edge padding sized so the FIRST and LAST items can be scrolled to the middle.
+	// Without it their snap points land outside the scroll range (centring the
+	// second item needed a negative scrollLeft), and scroll-snap-stop:always then
+	// skips them — the "it's skipping Find and Draw" bug. Set as custom properties
+	// so the padding applies only while `.is-carousel` is on, which keeps the
+	// overflow measurement below from seeing padding it created itself.
+	const sizeEdgePadding = () => {
+		const first = items[0];
+		const last = items[items.length - 1];
+		const start = Math.max(0, (nav.clientWidth - first.offsetWidth) / 2);
+		const end = Math.max(0, (nav.clientWidth - last.offsetWidth) / 2);
+		nav.style.setProperty("--carousel-pad-start", `${Math.round(start)}px`);
+		nav.style.setProperty("--carousel-pad-end", `${Math.round(end)}px`);
+	};
+
 	const centre = (el, smooth = true) => {
 		if (!el) return;
 		// Computed rather than scrollIntoView, which can also scroll the document
@@ -129,6 +144,7 @@ export default function initHeaderCarousel(doc = document) {
 		if (enabled) return;
 		enabled = true;
 		nav.classList.add("is-carousel");
+		sizeEdgePadding();
 		nav.addEventListener("scroll", onScroll, { passive: true });
 		// Open on the selected tool rather than an arbitrary edge. Deferred a frame
 		// because drawing.js marks the default tool active after this module runs.
@@ -160,7 +176,14 @@ export default function initHeaderCarousel(doc = document) {
 		return doesOverflow;
 	};
 
-	const sync = () => (overflows() ? enable() : disable());
+	const sync = () => {
+		if (!overflows()) {
+			disable();
+			return;
+		}
+		if (enabled) sizeEdgePadding(); // width changed: re-measure the edges
+		enable();
+	};
 
 	nav.addEventListener("click", onClickCapture, true);
 
