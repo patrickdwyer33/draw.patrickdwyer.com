@@ -55,7 +55,36 @@ export default function initHeaderCarousel(doc = document) {
 		return closest;
 	};
 
+	// One swipe = one button, enforced rather than requested.
+	//
+	// CSS snapping alone cannot guarantee this when the buttons are different
+	// widths: the browser picks a fling distance from velocity, so the same swipe
+	// that advances one button past a wide "Submit" carries two past a narrow
+	// "Find". That is why specific buttons were consistently skipped — the ones
+	// with short labels sitting next to long ones.
+	//
+	// So: remember which button we started on, and once the scroll settles, if it
+	// travelled more than one step, walk it back to exactly one. Deterministic
+	// regardless of widths, momentum, or browser snapping quirks.
+	let pressIndex = -1;
+	let settleTimer = 0;
+
+	const settle = () => {
+		if (pressIndex < 0) return;
+		const landed = items.indexOf(focusFromScroll());
+		const delta = landed - pressIndex;
+		if (Math.abs(delta) > 1) {
+			const target = items[pressIndex + Math.sign(delta)];
+			setFocused(target);
+			centre(target);
+		}
+		pressIndex = -1;
+	};
+
 	const onScroll = () => {
+		clearTimeout(settleTimer);
+		// Fires once the scroll has actually stopped, momentum included.
+		settleTimer = setTimeout(settle, 140);
 		if (frame) return;
 		frame = requestAnimationFrame(() => {
 			frame = 0;
@@ -105,6 +134,8 @@ export default function initHeaderCarousel(doc = document) {
 			pressX = event.clientX;
 			pressY = event.clientY;
 			dragged = false;
+			// Where this gesture began, so settle() can cap it at one step.
+			pressIndex = items.indexOf(focused);
 		},
 		{ passive: true }
 	);
