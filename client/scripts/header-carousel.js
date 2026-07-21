@@ -68,44 +68,20 @@ export default function initHeaderCarousel(doc = document) {
 		return closest;
 	};
 
-	// One swipe = one button, enforced rather than requested.
-	//
-	// CSS snapping alone cannot guarantee this when the buttons are different
-	// widths: the browser picks a fling distance from velocity, so the same swipe
-	// that advances one button past a wide "Submit" carries two past a narrow
-	// "Find". That is why specific buttons were consistently skipped — the ones
-	// with short labels sitting next to long ones.
-	//
-	// So: remember which button we started on, and once the scroll settles, if it
-	// travelled more than one step, walk it back to exactly one. Deterministic
-	// regardless of widths, momentum, or browser snapping quirks.
-	let pressIndex = -1;
 	let settleTimer = 0;
 	let pointerDown = false;
-	let travel = 0; // px the finger moved during the current gesture
 	let lastMoveAt = 0;
+	let suppressSettleUntil = 0;
+
+	// scrollLeft that puts `el` on the focus slot. Shared so settle can ask
+	// "already parked?" using the same arithmetic centre() would apply.
+	const scrollLeftFor = (el) => el.offsetLeft - (focusX() - el.offsetWidth / 2);
 	// How long a gesture may sit motionless before settle stops waiting for a
 	// release it may never get. Long enough not to fire mid-drag, short enough
 	// that a dropped touchend costs one beat rather than the session.
 	const STALE_GESTURE_MS = 500;
 
-	// Average centre-to-centre distance between buttons. Derived rather than
-	// assumed because the labels differ in width — the whole reason a fixed step
-	// size was never going to work here.
-	const stepWidth = () => {
-		if (items.length < 2) return 1;
-		const first = items[0];
-		const last = items[items.length - 1];
-		const span =
-			last.offsetLeft + last.offsetWidth / 2 - (first.offsetLeft + first.offsetWidth / 2);
-		return Math.max(1, span / (items.length - 1));
-	};
-
 	const settle = () => {
-		// Never settle under a finger that is still down. The timer keys off the
-		// scroll stopping, and a slow drag that pauses mid-row stops scrolling
-		// without ending the gesture — settling there re-centres the row while the
-		// user is still dragging it, which reads as a random jump backwards.
 		// Defer while the finger is still working the row: the timer keys off the
 		// scroll stopping, and a slow drag that pauses stops scrolling without
 		// ending the gesture, so settling there re-centres under the user.
@@ -113,32 +89,27 @@ export default function initHeaderCarousel(doc = document) {
 		// The staleness check is what makes this safe. An earlier version deferred
 		// on pointerDown alone, so a release event that never arrived left settle
 		// rescheduling itself every 140ms — the carousel silently stopped settling
-		// for the rest of the session. Correctness must not depend on reliably
-		// receiving one event.
+		// for the rest of the session.
 		if (pointerDown && performance.now() - lastMoveAt < STALE_GESTURE_MS) {
 			settleTimer = setTimeout(settle, 140);
 			return;
 		}
-		if (pressIndex < 0) return;
-		let landed = items.indexOf(focusFromScroll());
-		const delta = landed - pressIndex;
-		// Cap the gesture at what the FINGER covered, not at one step.
+		// Don't interrupt a programmatic glide — settling mid-animation would snap
+		// to whatever item happened to be passing the slot at that instant.
+		if (performance.now() < suppressSettleUntil) return;
+
+		// Snap to whatever is AT the slot, which is exactly what the highlight has
+		// been showing throughout the scroll.
 		//
-		// The rule being enforced is "momentum must not carry you further than you
-		// swiped". A flat cap of 1 encodes an assumption that every gesture is a
-		// small flick, so a long deliberate drag got rewritten to one step from
-		// where it began — i.e. yanked almost all the way back.
-		//
-		// During a drag the row tracks the finger 1:1, so travel / stepWidth is
-		// how many buttons actually passed under it. A short flick still yields 1
-		// (the original discrete-scroll behaviour); a long drag settles on the
-		// button nearest where it stopped.
-		const maxSteps = Math.max(1, Math.round(travel / stepWidth()));
-		if (Math.abs(delta) > maxSteps) landed = pressIndex + Math.sign(delta) * maxSteps;
-		const target = items[landed];
+		// This used to cap the landing at how far the finger travelled, to stop
+		// momentum overshooting. That cap fought the user rather than helping: the
+		// row highlights the item at the slot live, so capping moved you somewhere
+		// other than the button you just watched light up — worst on a fast flick,
+		// where momentum and finger distance diverge most. The cap existed to stop
+		// CSS scroll-snap skipping buttons, and CSS snapping is long gone.
+		const target = focusFromScroll();
 		setFocused(target);
-		centre(target);
-		pressIndex = -1;
+		if (Math.abs(nav.scrollLeft - scrollLeftFor(target)) > 1) centre(target);
 	};
 
 	const onScroll = () => {
@@ -179,7 +150,8 @@ export default function initHeaderCarousel(doc = document) {
 		// Smoothness is requested PER CALL. Putting `scroll-behavior: smooth` on
 		// the element applies it to the user's finger too, so touch momentum ends
 		// up fighting the animation for the same scrollLeft — the erratic drag.
-		const left = el.offsetLeft - (focusX() - el.offsetWidth / 2);
+		const left = scrollLeftFor(el);
+		if (smooth) suppressSettleUntil = performance.now() + 400;
 		nav.scrollTo({ left, behavior: smooth ? "smooth" : "auto" });
 	};
 
@@ -195,25 +167,19 @@ export default function initHeaderCarousel(doc = document) {
 	//
 	// The nav is natively scrolled (touch-action: pan-x), so the moment a finger
 	// moves horizontally the browser claims the gesture and fires pointercancel —
-	// after which no pointermove arrives at all. Measuring travel from pointer
-	// events therefore read ~0 for every real swipe on a phone, which collapsed
-	// maxSteps to 1 and made the cap behave as if it had never been fixed. It
-	// looked correct on desktop only because a mouse triggers no such takeover.
-	// touchmove keeps firing throughout a native scroll.
+	// after which no pointermove arrives at all — so a swipe looked like a
+	// motionless press and was mistaken for a tap. touchmove keeps firing
+	// throughout a native scroll, so tap-vs-drag is decided from it.
 	const beginGesture = (x, y) => {
 		lastMoveAt = performance.now();
 		pressX = x;
 		pressY = y;
-		travel = 0;
 		dragged = false;
 		pointerDown = true;
-		// Where this gesture began, so settle() can cap it at what the finger did.
-		pressIndex = items.indexOf(focused);
 	};
 
 	const moveGesture = (x, y) => {
 		const dx = Math.abs(x - pressX);
-		travel = Math.max(travel, dx);
 		lastMoveAt = performance.now();
 		if (dx > DRAG_SLOP || Math.abs(y - pressY) > DRAG_SLOP) dragged = true;
 	};
@@ -292,12 +258,7 @@ export default function initHeaderCarousel(doc = document) {
 		if (!item || item === focused) return; // already centred → let it through
 		event.preventDefault();
 		event.stopPropagation();
-		// Cancel the pending settle. The one-step cap is a rule about SWIPES —
-		// momentum should not carry you further than you flicked. A tap is an
-		// explicit destination and may be any distance away, so leaving pressIndex
-		// set here lets settle() mistake the jump for an over-travelled swipe and
-		// walk it back towards where the tap started.
-		pressIndex = -1;
+		// A tap is an explicit destination; nothing pending should redirect it.
 		clearTimeout(settleTimer);
 		setFocused(item); // set explicitly: an end item cannot be derived from scroll
 		centre(item);
