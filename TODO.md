@@ -38,269 +38,107 @@ and averages to nothing across it.
 
 ---
 
-## Active: a SECOND stutter, and the app is measurably not causing it
+## Remaining work
 
-Distinct from the clock bug: it stutters while watching continuously, never
-switching away.
+### Worth doing
 
-### Round 8 — frame delivery is perfect (2026-07-20)
+- [ ] **Prod cutover for `draw.patrickdwyer.com`** — the only substantial item.
+      DNS for `draw` + `objects`, the prod Cloudflare Transform Rule (Request
+      header, *not* Response), and committing `platform-gitops/apps/draw-prod.yaml`
+      (deliberately uncommitted). Dev has been stable for days; nothing blocks this
+      but the decision to do it.
+- [ ] **Bring the Playwright touch harness into the repo as a real test.** Needs
+      `playwright` as a dev dependency. It caught three defects `npm test`
+      structurally cannot see, all in the same class: code that behaves correctly
+      with a mouse and wrongly under a finger, because the browser cancels pointer
+      events when it takes over a pan. Scripts currently live only in the session
+      scratchpad and will be lost.
+- [ ] **`platform-gitops/deploy` masks AWS errors as "tag not found".** The
+      `describe-images` check pipes stderr to `/dev/null`, so expired credentials, a
+      wrong region, or a network failure all report `tag '<sha>' not found in ECR
+      repo draw`. Hit twice during this work, in exactly the moment a straight
+      answer was needed.
+- [ ] **CI builds are not reproducible.** `package-lock.json` is both gitignored and
+      dockerignored, so every Docker build resolves dependencies fresh — the CI
+      bundle hash differs from a local build of identical source. Benign so far, but
+      a breaking transitive update would land silently.
 
-~13,500 frames / ~110 s of `[frames]` summaries, every line identical in shape:
+### Small / cosmetic
 
-```
-median=8.3ms (~120Hz)  min≈7.3  p95≈9.3  max≈9.4  |  dropped: 0 (0.0%)  |  >2.5x: 0
-```
+- [ ] White-thresholding of antialiased grey balls
+- [ ] `vpc-cni` addon drift reconcile on the cluster
 
-**Zero dropped frames. Max interval 9.4 ms.** Combined with `prevStep ≈ 1 ms`:
+### Explicitly NOT doing
 
-- our physics costs ~1 ms of an 8.3 ms budget (120 Hz display — ProMotion)
-- the browser delivers a frame every 8.3 ms without ever being late
-- **no main-thread event exists that could cause a visible stutter.** A JS hitch
-  would have to appear as an interval above 9.4 ms; across 110 s, none did.
-
-Also settles the EMA question **against** the earlier hypothesis that smoothing was
-making drops worse. Intervals vary 7.2–9.4 ms around a hard 8.3 ms median — that is
-rAF *timestamp* jitter on a vsync-locked display, not real variance. Feeding true
-elapsed time would inject that noise into the motion; constant dt is correct. And it
-is moot at the magnitudes involved: 1 ms at 200 px/s is 0.2 px. **No pacing change
-made** — the data does not support one.
-
-Everything left is downstream of handing off the frame: compositor, GPU, or display.
-JS instrumentation is structurally blind to that half of the pipeline.
-
-- [ ] **DevTools → ⋮ → More tools → Rendering → "Frame Rendering Stats"** — overlays
-      the compositor's *presented* frame rate and dropped-frame count. Watch it
-      through a stutter.
-- [ ] Cross-check in **Safari or Firefox**. Smooth there → Chrome's compositor/GPU
-      path, not the app or the machine.
-- [ ] Cross-check **another animated WebGL page**. Stutters there too → nothing in
-      this repo is involved.
-### Round 9 — "it's almost like shake it up is running"
-
-That observation reframes it again, and explains why every prior measurement came
-back clean: **a batch of balls changing state in one frame costs nothing and arrives
-on time.** Round 8's perfect timing is not evidence against a lurch — it is exactly
-what a lurch looks like from the timing side. Every measurement so far asked "was
-the frame late?", never "did the frame's contents jump?".
-
-Confirmed from the code: there is **no** shuffle besides the button. `main.js`
-wires `shakeItUp`/`refillBalls` to `click` and nothing else, `runSimulation` runs
-once, no timers, no other callers. The only mechanisms that can move balls en masse:
-
-| Mechanism | Visual |
-|---|---|
-| `startedSeeking` | hard direction change, random 200px/s → directed 100px/s at the target |
-| `stuck` | **teleport** of up to ~7px snapping onto the final position |
-| `erased` | teleport to `-1000`, ball vanishes |
-| `collisions` | velocity swaps between pairs |
-
-Added `[spike]` logging (`41d54a1`) for any frame where >40 balls change state or
-collisions exceed half the ball count.
-
-**Leading hypothesis — button retains keyboard focus.** `shake-it-up-button` is a
-`<button>`; once clicked it keeps DOM focus, and a focused button fires `click` on
-**Space or Enter**. Click SHAKE IT UP once and any later idle spacebar press re-runs
-the full rescatter. It would look exactly like shake it up because it *is* shake it
-up, be invisible to all timing instrumentation, and feel random and occasional.
-
-- [ ] **Zero-cost check first:** `rescatterBalls` already logs `Shook up N balls
-      with M failed placement attempts`. If that line appears at the moment of the
-      stutter, it is genuinely firing. If it never appears, it definitively is not.
-- [ ] If confirmed, fix is one line: `shakeButton.blur()` in the handler so the
-      button does not keep keyboard focus. Same for the refill button.
-- [ ] If `[spike]` fires instead, the named counter identifies the mechanism.
-
-### Deferred
-
-- [ ] If it does prove GPU-side, the one app-level suspect worth testing is the
-      per-frame `gl.bufferSubData` into a buffer the GPU may still be reading, which
-      can force a driver sync. Buffer orphaning or double-buffering would be the fix.
-      **Untested and unevidenced — do not implement without measurement.**
+- **Further simulation optimization.** The frame costs ~1 ms of an 8.3 ms budget
+  with zero dropped frames in 13,500. The previously-listed ideas (typed arrays for
+  `velocities`/`ballTimeouts`/flags, merging the four per-ball loops) would optimize
+  a loop that is already ~6% of budget. Left here as rejected, not pending.
+- **The `?debug` instrumentation.** Opt-in, costs nothing when off, and earned its
+  keep repeatedly. Keep it.
 
 ---
 
-## History: simulation stutter investigation
+## RESOLVED: the second stutter was Chrome, not the app
 
-**Symptom:** the `/simulate` animation stutters visibly. FPS reads a solid 60 and
-the Frames track is green, so this is frame-*pacing* / cost-*spike* behaviour, not
-a sustained framerate drop.
+Distinct from the clock bug: it stuttered while watching continuously, never
+switching away. Closed by a single observation — **Safari is completely smooth on
+the same machine with the same drawing.** Same JS, same GPU, same canvas; the only
+variable is the browser. Nothing in this repo is implicated.
 
-**Method:** each round has been driven by a DevTools Performance recording
-(Bottom-up tab), and minified frame names are resolved by downloading the deployed
-bundle and reading the exact `line:column` the profiler points at. No guessing.
+That is consistent with everything measured: ~13,500 frames at a median 8.3 ms
+(120 Hz ProMotion), **zero dropped**, max interval 9.4 ms, `prevStep ≈ 1 ms`. No
+main-thread event existed that could produce a visible stutter — a JS hitch would
+have had to appear as an interval above 9.4 ms, and across 110 s none did.
+Everything left was downstream of handing off the frame: compositor, GPU, or
+display, where JS instrumentation is structurally blind.
 
-### Profile history
+The "shake it up is running" hypothesis (a focused button re-firing on Space) was
+also cleared: `[spike]` logging never fired, and `rescatterBalls` logs on every
+invocation and stayed silent.
 
-| Round | Deployed | Top self-time entries | Outcome |
-|---|---|---|---|
-| 1 | — | `Major GC` 18.4%, RBush `compareMinY` 8.3% / `compareMinX` 7.8% / `search` 6.4% / `_all` 6.1% | RBush rebuild + its garbage dominated |
-| 2 | `a369e82` | `findCollidingNeighbor` 38.8%, `updateAnimationState` 34.0%, `buildCollisionGrid` 6.3% | GC and **all** RBush entries gone; grid query became the new bottleneck |
-| 3 | `0b308d3` | `updateAnimationState` 34.0%, *(extension 14.5%)*, `findCollidingNeighbor` 11.8%, `buildCollisionGrid` 5.8% | Query cost cut ~3.3x; `updateAnimationState` now #1 |
+**Method note worth keeping.** Five rounds of profiling chased average frame cost
+and never explained a symptom that was never about cost. What settled it in one run
+was instrumenting the frame *gap* (`?debug`) rather than the frame *contents* — a
+~10 s-interval event is nearly impossible to catch in a 9 s recording and averages
+to nothing across it. Cross-browser comparison then cost one minute and answered
+what four profiles could not.
 
-### Done
+---
 
-- [x] Clamp `deltaTime` (`MAX_DELTA_TIME = 1/30`) so one slow frame can't teleport balls
-- [x] EMA-smooth the physics step (`DT_SMOOTHING = 0.1`) — rAF timestamps jitter even at a steady vsync
-- [x] `MAX_BALLS` 5000 → 4000
-- [x] `positions` as a reused `Float32Array` — kills the per-frame `bufferSubData` allocation
-- [x] Reuse collision structures instead of reallocating per frame
-- [x] **Replace the per-frame RBush rebuild with a uniform spatial grid** (`a369e82`) — removed Major GC and all RBush cost
-- [x] **One-diameter cells + intrusive linked-list bucketing** (`0b308d3`) — bounds query cost under clustering
-- [x] `finalPositionsMap` (`Map<number,[x,y]>`) → flat `Float32Array` — was 2 hash lookups + 2 derefs per ball per frame
+## RESOLVED: mobile (2026-07-21)
 
-### Round 4 — the actual periodic hitch (2026-07-20)
+The header and touch input were both broken on a phone, in ways that were invisible
+on desktop.
 
-**Reported symptom, which reframed everything:** *"super smooth for a while on
-startup and then like 10 seconds in it does a big stutter, but just one frame jump,
-and then it's mostly good again."* Also reproduces **in incognito with extensions
-disabled**, so the Claude-in-Chrome wrapper is not the cause (it is still real
-overhead on the frame path, just not this).
+- [x] **Drawing never worked on touch at all.** `drawing.js` bound mouse events
+      only, and a finger produces no `mousedown`/`mousemove` drag — the swipe fell
+      through to the browser and scrolled the page. Pointer events + `touch-action:
+      none` + a viewport-locked `html, body`.
+- [x] **Header carousel** for overflowing buttons, keyed off measured overflow
+      rather than a breakpoint, so a narrow desktop window behaves like a phone and
+      the simulate page gets it too. Two-tap semantics: an off-slot tap centres, a
+      second tap acts. Focus slot sits beside the title; opens on the colour swatch,
+      the one control whose *state* you must see rather than merely reach.
+- [x] **Snap-back, three rounds.** Final cause: settle applied a one-step cap that
+      discarded the live highlight. It now snaps to whatever `focusFromScroll()`
+      reports — the same function driving the highlight — so the resting position is
+      correct *by construction* rather than by two code paths agreeing. The cap
+      itself was vestigial, left over from CSS scroll-snap that had already been
+      deleted.
+- [x] **Safari crash + cache bug** — 0x0 canvas before layout; desktop-sized
+      `MAX_BALLS`; and HTML being served `max-age=0` because Express `send()`
+      rewrites `Cache-Control` after `setHeaders` runs unless `cacheControl: false`.
+- [x] **Eraser size picker** — three pink circles, fixed-position outside the nav so
+      the scroll container cannot clip it. Surfaced a latent bug: `state.currentTool`
+      was never assigned, so choosing a colour mid-erase turned the eraser into a pen.
+- [x] **Loading overlay** on submit and find, held through the navigation and
+      cleared on `pageshow`/persisted so a bfcache restore cannot strand it.
 
-An isolated hitch every ~10s with smooth stretches between is not a throughput
-problem — average frame cost cannot produce it. It is the signature of a **major GC
-pause**, which meant something was still allocating steadily.
-
-**Found it:** `processCollision` returned a fresh `[v1x, v1y, v2x, v2y]` array that
-the caller destructured — **one allocation per colliding pair per frame**, thousands
-per second. Most died young, but steady promotion out of the young generation is
-exactly what schedules a periodic major GC. Fixed by writing results directly into
-`velocities`. Also hoisted `cos(phi)`/`sin(phi)`, which were each recomputed 4x.
-
-Swept the whole per-frame path afterwards; the only other allocation was
-`gl.clearColor(...clearColor)` (spread builds an iterator each frame), also removed.
-`updateAnimationState`, `buildCollisionGrid`, `findCollidingNeighbor`,
-`distanceToLineSegment` and `processCollision` now all scan clean — **the frame
-should be allocation-free**.
-
-- [x] `processCollision` writes in place instead of returning an array
-- [x] Hoist repeated `Math.cos`/`Math.sin` in `processCollision`
-- [x] Remove the `clearColor` spread
-- [x] **Verified — and it was NOT enough.** Recording with Memory on showed the JS
-      heap *still* climbing steadily and dropping vertically (a live sawtooth,
-      4.1 → 5.1 MB across the window). So something was still allocating.
-
-### Round 5 — the sweep missed a file (2026-07-20)
-
-The round-4 allocation sweep only scanned `simulation.js`. The remaining per-frame
-allocation was in **`animate.js`**: `createAnimation(fn, ...args)` calling
-`fn(deltaTime, now, ...args)` spread a 6-element array into a call **on every
-frame**. Fixed by taking a closure bound once at the call site.
-
-Re-swept *every* module on the frame path (`animate`, `buffers`, `init`, `shaders`).
-All remaining hits are one-time init or debug-only. The frame path is now genuinely
-allocation-free.
-
-- [x] `createAnimation` takes a closure; no per-frame spread
-- [x] Swept all frame-path modules, not just `simulation.js`
-
-**But note the profile Summary: Scripting 1,039 ms out of 20,453 ms — the main
-thread is ~95% idle.** A "big stutter" is therefore unlikely to be our JS at all.
-
-### Round 5 instrumentation — stop guessing
-
-Added opt-in frame diagnostics behind `?debug`:
-
-    https://dev.draw.patrickdwyer.com/simulate?title=face&debug
-
-Any frame whose wall-clock gap exceeds 50 ms logs:
-
-    [hitch] t=12.3s gap=210.4ms prevStep=3.1ms unaccounted=207.3ms
-
-**`unaccounted` is the decisive number.** It is the frame gap minus the time our own
-`step()` actually ran (measured on the previous frame, which is the one that could
-have caused the gap).
-
-- **`unaccounted` large, `prevStep` small** → the stall is NOT our code. GC, the
-  compositor, or the GPU. Optimizing the sim loop further is wasted effort; look at
-  canvas backing size / `devicePixelRatio`, or accept GC and reduce heap churn
-  elsewhere.
-- **`prevStep` large** → it *is* our code, and we know which frame to zoom into.
-
-- [x] **Ran it. The answer is: it is not our code.**
-
-### Round 6 — the simulation is exonerated (2026-07-20)
-
-```
-[hitch] t=0.2s  gap=218.3ms  prevStep=0.0ms unaccounted=218.3ms   (startup, expected)
-[hitch] t=7.8s  gap=3334.2ms prevStep=1.6ms unaccounted=3332.6ms
-[hitch] t=27.3s gap=2334.3ms prevStep=1.1ms unaccounted=2333.2ms
-[hitch] t=76.2s gap=2516.7ms prevStep=1.0ms unaccounted=2515.7ms
-```
-
-**`prevStep` is ~1.0–1.6 ms.** The simulation now costs about 1 ms of a 16.7 ms
-frame budget — roughly 6%. Five rounds of optimization are done; there is no
-meaningful CPU left to remove from this loop.
-
-**The freezes are 2–3 SECONDS with our code not running.** `requestAnimationFrame`
-is not being called at all during them. Nothing in this app can cause that while it
-holds the main thread for a millisecond at a time. The intervals are also irregular
-(7.6 s, 19.5 s, 48.9 s apart), which does not fit a GC cadence.
-
-Remaining candidates are all outside the app:
-
-1. **Tab occlusion / visibility throttling** — Chrome stops rAF for hidden or
-   occluded pages, by design.
-2. **Compositor or GPU-process stall** — the GPU track ran solid green for entire
-   recordings and has never been explained. On a Mac, a discrete/integrated GPU
-   switch can freeze a WebGL context for seconds.
-3. **System CPU contention** — worth controlling for: the agent session driving this
-   work has been running `npm run build`, AWS CLI calls, `kubectl`, and background
-   polling loops on the same machine, some of it concurrent with testing.
-
-- [ ] **Re-run with `&debug` and report the new fields** (`visibility`, `focus`,
-      `drift`). These distinguish all three:
-      - `visibility=hidden` or `focus=false` → occlusion; expected behaviour, not a bug
-      - `drift≈0` with `visibility=visible` → browser was awake and withheld the
-        frame → compositor/GPU stall or CPU starvation
-      - `drift` large → rAF itself was being throttled
-- [ ] Control the experiment: run it with nothing else heavy on the machine (no
-      builds, no deploys in flight) and the window fully visible and focused.
-- [x] Checked the canvas backing store — **not** the problem.
-      `resizeCanvasToDisplaySize(canvas, multiplier)` defaults `multiplier` to 1, so
-      the drawing buffer is sized in CSS pixels and is *not* `devicePixelRatio`
-      scaled. No hidden 4x pixel cost on a retina display. The solid-green GPU track
-      remains unexplained but is not an oversized canvas.
-
-### Next up
-
-- [ ] **Typed arrays for the remaining per-ball state.** `positions` is a `Float32Array`
-      but `velocities` is a plain JS `Array`, as are `ballTimeouts`,
-      `ballSeekingStartTime`, `ballStuck`, `ballErased`. Every hot loop in
-      `updateAnimationState` touches them. → `Float32Array` for velocities/timeouts,
-      `Uint8Array` for the two boolean flags.
-- [ ] **Merge the four per-ball loops** in `updateAnimationState` (wall bounce,
-      collision pairing, seek/timeout, integrate). Four passes over the same arrays
-      means four traversals of the same memory; one pass is better for cache locality.
-      Care needed: collision pairing must still see all positions from *before*
-      integration, so the merge is not unconditional — verify ordering semantics.
-
-### Open questions / confounds
-
-- [ ] **HIGHEST VALUE NEXT TEST — a browser extension is on the frame critical path.**
-      Sorting the round-3 profile by Total time exposes the call chain:
-
-      ```
-      Animation frame fired            491.5 ms total,  15.2 ms self
-        └─ agent-visual-indicator.js   484.0 ms total,  91.0 ms self   <- Claude in Chrome
-             └─ s (our rAF callback)   354.1 ms total,  14.8 ms self
-                  └─ updateAnimationState  326.9 ms total, 212.5 ms self
-      ```
-
-      Our animation callback is *nested inside* the extension's function call, which
-      means the extension patches `requestAnimationFrame`. It burns **91 ms of self
-      time (14.5%)** per selection, between vsync and our physics, and it is the
-      second-largest self-time entry in the profile. Per-frame variance there lands
-      directly as frame-pacing jitter.
-
-      **Test: re-record in incognito / a clean profile with extensions disabled.**
-      Until that is done, every percentage above is distorted and it is unknown how
-      much of the remaining stutter is ours at all.
-- [ ] **Is the remaining stutter even CPU-bound?** The GPU track runs solid green for
-      the whole recording. Worth checking canvas backing size (`devicePixelRatio` on a
-      retina display can make a "full screen" canvas 4x the pixels) before assuming
-      more JS optimization will help.
-- [ ] Consider whether EMA dt smoothing is still the right call, or whether a fixed
-      timestep with an accumulator would pace more evenly.
+**Lesson.** Two "fixes" shipped that could not possibly have worked, because I was
+verifying with a mouse. The bug class — the browser firing `pointercancel` and
+cutting the event stream the moment it claims a pan — is invisible on desktop by
+construction. Touch emulation found both in minutes.
 
 ---
 
@@ -311,14 +149,3 @@ Remaining candidates are all outside the app:
       committing `platform-gitops/apps/draw-prod.yaml` (deliberately uncommitted today).
 - [ ] White-thresholding of antialiased grey balls
 - [ ] `vpc-cni` addon drift reconcile on the cluster
-
-## Papercuts worth fixing
-
-- [ ] **`platform-gitops/deploy` masks AWS errors as "tag not found".** The
-      `describe-images` check pipes stderr to `/dev/null`, so expired credentials,
-      a wrong region, or a network failure all report `tag '<sha>' not found in ECR
-      repo draw`. Misleading in exactly the moment you need a straight answer.
-- [ ] **CI builds are not reproducible.** `package-lock.json` is both gitignored and
-      dockerignored, so every Docker build resolves dependencies fresh — the CI bundle
-      hash differs from a local build of identical source. Benign so far, but it means
-      a breaking transitive update could land silently.
