@@ -82,6 +82,19 @@ export default function initHeaderCarousel(doc = document) {
 	let pressIndex = -1;
 	let settleTimer = 0;
 	let pointerDown = false;
+	let travel = 0; // px the finger moved during the current gesture
+
+	// Average centre-to-centre distance between buttons. Derived rather than
+	// assumed because the labels differ in width — the whole reason a fixed step
+	// size was never going to work here.
+	const stepWidth = () => {
+		if (items.length < 2) return 1;
+		const first = items[0];
+		const last = items[items.length - 1];
+		const span =
+			last.offsetLeft + last.offsetWidth / 2 - (first.offsetLeft + first.offsetWidth / 2);
+		return Math.max(1, span / (items.length - 1));
+	};
 
 	const settle = () => {
 		// Never settle under a finger that is still down. The timer keys off the
@@ -95,10 +108,19 @@ export default function initHeaderCarousel(doc = document) {
 		if (pressIndex < 0) return;
 		let landed = items.indexOf(focusFromScroll());
 		const delta = landed - pressIndex;
-		// Cap the gesture at one step, then always park on the slot: with CSS
-		// snapping removed this pass is what makes the scroll come to rest
-		// somewhere deliberate rather than wherever momentum ran out.
-		if (Math.abs(delta) > 1) landed = pressIndex + Math.sign(delta);
+		// Cap the gesture at what the FINGER covered, not at one step.
+		//
+		// The rule being enforced is "momentum must not carry you further than you
+		// swiped". A flat cap of 1 encodes an assumption that every gesture is a
+		// small flick, so a long deliberate drag got rewritten to one step from
+		// where it began — i.e. yanked almost all the way back.
+		//
+		// During a drag the row tracks the finger 1:1, so travel / stepWidth is
+		// how many buttons actually passed under it. A short flick still yields 1
+		// (the original discrete-scroll behaviour); a long drag settles on the
+		// button nearest where it stopped.
+		const maxSteps = Math.max(1, Math.round(travel / stepWidth()));
+		if (Math.abs(delta) > maxSteps) landed = pressIndex + Math.sign(delta) * maxSteps;
 		const target = items[landed];
 		setFocused(target);
 		centre(target);
@@ -161,6 +183,7 @@ export default function initHeaderCarousel(doc = document) {
 			pressX = event.clientX;
 			pressY = event.clientY;
 			dragged = false;
+			travel = 0;
 			pointerDown = true;
 			// Where this gesture began, so settle() can cap it at one step.
 			pressIndex = items.indexOf(focused);
@@ -171,10 +194,9 @@ export default function initHeaderCarousel(doc = document) {
 	nav.addEventListener(
 		"pointermove",
 		(event) => {
-			if (
-				Math.abs(event.clientX - pressX) > DRAG_SLOP ||
-				Math.abs(event.clientY - pressY) > DRAG_SLOP
-			) {
+			const dx = Math.abs(event.clientX - pressX);
+			travel = Math.max(travel, dx);
+			if (dx > DRAG_SLOP || Math.abs(event.clientY - pressY) > DRAG_SLOP) {
 				dragged = true;
 			}
 		},
