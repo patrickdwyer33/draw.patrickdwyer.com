@@ -31,8 +31,142 @@ header {
     }
 }
 
-nav {
-    display: contents;
+/* The nav is a real flex row (it used to be `display: contents`, which let the
+   buttons be laid out by the header directly). It needs its own box so it can
+   scroll independently of the title when the buttons do not fit. */
+header nav {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+/* ---------------------------------------------------------------------------
+   Header buttons.
+
+   These had NO styling at all — they were native platform buttons, which is why
+   the drawing and simulate pages looked different from each other on mobile:
+   a native button's corner radius is derived from its height, and the two navs
+   resolve to different heights (only the drawing page contains the colour
+   input, which stretches the flex row). Styling them explicitly makes the two
+   pages identical at every screen size.
+   --------------------------------------------------------------------------- */
+header nav button {
+    flex: 0 0 auto;
+    min-height: 34px;
+    padding: 0 0.7rem;
+    border: 1px solid #00000022;
+    border-radius: 8px;
+    background: #fff;
+    color: #222;
+    font: inherit;
+    font-size: 0.85rem;
+    line-height: 1;
+    white-space: nowrap;
+    cursor: pointer;
+    -webkit-appearance: none;
+    appearance: none;
+}
+
+header nav button:hover {
+    background: #f2f2f2;
+}
+
+/* The selected tool. `.active` was applied by drawing.js from the start but was
+   never styled, so which tool you were holding was invisible. */
+header nav button.active {
+    background: #222;
+    color: #fff;
+    border-color: #222;
+    font-weight: 700;
+}
+
+/* ---------------------------------------------------------------------------
+   Overflow carousel.
+
+   Keyed off whether the buttons ACTUALLY overflow, not off a device breakpoint:
+   a narrow desktop window has the same problem a phone does, and a phone in
+   landscape may not have it at all. header-carousel.js adds `.is-carousel` when
+   nav.scrollWidth exceeds nav.clientWidth.
+
+   Centring only magnifies. It never activates anything — scrolling past Erase
+   on the way to Submit must not leave you holding the eraser, so every action
+   still needs a deliberate tap.
+   --------------------------------------------------------------------------- */
+header nav.is-carousel {
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    /* Fade both edges so the row reads as scrollable rather than clipped. */
+    -webkit-mask-image: linear-gradient(to right, transparent, #000 16px, #000 calc(100% - 16px), transparent);
+    mask-image: linear-gradient(to right, transparent, #000 16px, #000 calc(100% - 16px), transparent);
+}
+
+header nav.is-carousel::-webkit-scrollbar {
+    display: none;
+}
+
+/* Spacers so the first and last buttons can reach the centre of the row. */
+header nav.is-carousel::before,
+header nav.is-carousel::after {
+    content: "";
+    flex: 0 0 50%;
+}
+
+header nav.is-carousel > * {
+    scroll-snap-align: center;
+    flex: 0 0 auto;
+    transform: scale(0.88);
+    opacity: 0.5;
+    transition: transform 0.18s ease, opacity 0.18s ease;
+}
+
+header nav.is-carousel > .is-centered {
+    transform: scale(1);
+    opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    header nav.is-carousel > * {
+        transition: none;
+    }
+}
+
+/* Narrow screens: give the header a real touch-sized height instead of 5vh
+   (~35px on a phone, below the 44px touch target), and hide the colour label so
+   the swatch alone takes a carousel slot. dvh so mobile browser chrome
+   appearing/disappearing does not leave the canvas the wrong height. */
+@media (max-width: 640px) {
+    header {
+        height: 46px;
+    }
+
+    main {
+        height: calc(100dvh - 46px);
+    }
+
+    header h1 {
+        margin: 0 0.5rem;
+        font-size: 1.05rem;
+        max-width: 6rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        flex: 0 0 auto;
+    }
+
+    .color-picker-label {
+        display: none;
+    }
+
+    header nav .color-picker input {
+        width: 34px;
+        height: 34px;
+    }
 }
 
 /* Modal Styles */

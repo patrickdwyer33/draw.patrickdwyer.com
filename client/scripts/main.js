@@ -2,11 +2,15 @@ import Optional from "/scripts/utils/optional.js";
 import Either from "/scripts/utils/either.js";
 
 import initPWA from "/scripts/pwa.js";
+import initHeaderCarousel from "/scripts/header-carousel.js";
 import setupUserDrawing from "/scripts/drawing.js";
 import runSimulation from "/scripts/webgl/simulation.js";
 
 const period = 60 * 1000;
 initPWA(period);
+
+// Both pages share the same header markup, so this runs before routing.
+initHeaderCarousel();
 
 const routes = {
 	"/": () => {
