@@ -111,6 +111,18 @@ header nav.is-carousel {
        a smooth-scroll animation for the same scrollLeft — which is what made
        dragging feel erratic. Programmatic centring passes behavior:'smooth' to
        scrollTo() instead. */
+
+    /* Make the scroll DISCRETE: one swipe advances one button rather than
+       flinging past the whole row. `scroll-snap-stop: always` on the items below
+       is what does it — it forbids the scroll from skipping over a snap point,
+       so momentum is arrested at the very next one no matter how hard the flick.
+
+       Proximity, not mandatory, and the END items are deliberately excluded
+       from snapping below: a centre-aligned snap point needs space beside the
+       item to be reachable, and the first and last have none. Making them snap
+       targets is exactly what previously left them unreachable. Excluded, the
+       scroll rests freely at both extremes while the middle still arrests. */
+    scroll-snap-type: x proximity;
     /* Inset so an end item at rest clears the edge fade below rather than
        sitting half-dissolved against the title. */
     padding-inline: 14px;
@@ -131,6 +143,13 @@ header nav.is-carousel > * {
     transform: scale(0.88);
     opacity: 0.5;
     transition: transform 0.18s ease, opacity 0.18s ease;
+}
+
+/* Snap targets exclude the first and last item — see the note above.
+   scroll-snap-stop:always is what makes a flick advance exactly one button. */
+header nav.is-carousel > *:not(:first-child):not(:last-child) {
+    scroll-snap-align: center;
+    scroll-snap-stop: always;
 }
 
 header nav.is-carousel > .is-centered {
