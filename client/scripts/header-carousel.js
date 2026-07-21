@@ -83,6 +83,11 @@ export default function initHeaderCarousel(doc = document) {
 	let settleTimer = 0;
 	let pointerDown = false;
 	let travel = 0; // px the finger moved during the current gesture
+	let lastMoveAt = 0;
+	// How long a gesture may sit motionless before settle stops waiting for a
+	// release it may never get. Long enough not to fire mid-drag, short enough
+	// that a dropped touchend costs one beat rather than the session.
+	const STALE_GESTURE_MS = 500;
 
 	// Average centre-to-centre distance between buttons. Derived rather than
 	// assumed because the labels differ in width — the whole reason a fixed step
@@ -101,7 +106,16 @@ export default function initHeaderCarousel(doc = document) {
 		// scroll stopping, and a slow drag that pauses mid-row stops scrolling
 		// without ending the gesture — settling there re-centres the row while the
 		// user is still dragging it, which reads as a random jump backwards.
-		if (pointerDown) {
+		// Defer while the finger is still working the row: the timer keys off the
+		// scroll stopping, and a slow drag that pauses stops scrolling without
+		// ending the gesture, so settling there re-centres under the user.
+		//
+		// The staleness check is what makes this safe. An earlier version deferred
+		// on pointerDown alone, so a release event that never arrived left settle
+		// rescheduling itself every 140ms — the carousel silently stopped settling
+		// for the rest of the session. Correctness must not depend on reliably
+		// receiving one event.
+		if (pointerDown && performance.now() - lastMoveAt < STALE_GESTURE_MS) {
 			settleTimer = setTimeout(settle, 140);
 			return;
 		}
@@ -177,16 +191,61 @@ export default function initHeaderCarousel(doc = document) {
 	let dragged = false;
 	const DRAG_SLOP = 8; // px of movement before a press stops counting as a tap
 
+	// Gesture tracking runs on TOUCH events, not pointer events.
+	//
+	// The nav is natively scrolled (touch-action: pan-x), so the moment a finger
+	// moves horizontally the browser claims the gesture and fires pointercancel —
+	// after which no pointermove arrives at all. Measuring travel from pointer
+	// events therefore read ~0 for every real swipe on a phone, which collapsed
+	// maxSteps to 1 and made the cap behave as if it had never been fixed. It
+	// looked correct on desktop only because a mouse triggers no such takeover.
+	// touchmove keeps firing throughout a native scroll.
+	const beginGesture = (x, y) => {
+		lastMoveAt = performance.now();
+		pressX = x;
+		pressY = y;
+		travel = 0;
+		dragged = false;
+		pointerDown = true;
+		// Where this gesture began, so settle() can cap it at what the finger did.
+		pressIndex = items.indexOf(focused);
+	};
+
+	const moveGesture = (x, y) => {
+		const dx = Math.abs(x - pressX);
+		travel = Math.max(travel, dx);
+		lastMoveAt = performance.now();
+		if (dx > DRAG_SLOP || Math.abs(y - pressY) > DRAG_SLOP) dragged = true;
+	};
+
+	nav.addEventListener(
+		"touchstart",
+		(event) => {
+			const t = event.changedTouches[0];
+			if (t) beginGesture(t.clientX, t.clientY);
+		},
+		{ passive: true }
+	);
+
+	nav.addEventListener(
+		"touchmove",
+		(event) => {
+			const t = event.changedTouches[0];
+			if (t) moveGesture(t.clientX, t.clientY);
+		},
+		{ passive: true }
+	);
+
+	// Mouse and pen only. A touch pointer duplicates the handlers above and its
+	// stream is cut short by the scroll takeover, so letting it through would
+	// overwrite a good touch measurement with a truncated one.
+	const isTouch = (event) => event.pointerType === "touch";
+
 	nav.addEventListener(
 		"pointerdown",
 		(event) => {
-			pressX = event.clientX;
-			pressY = event.clientY;
-			dragged = false;
-			travel = 0;
-			pointerDown = true;
-			// Where this gesture began, so settle() can cap it at one step.
-			pressIndex = items.indexOf(focused);
+			if (isTouch(event)) return;
+			beginGesture(event.clientX, event.clientY);
 		},
 		{ passive: true }
 	);
@@ -194,11 +253,8 @@ export default function initHeaderCarousel(doc = document) {
 	nav.addEventListener(
 		"pointermove",
 		(event) => {
-			const dx = Math.abs(event.clientX - pressX);
-			travel = Math.max(travel, dx);
-			if (dx > DRAG_SLOP || Math.abs(event.clientY - pressY) > DRAG_SLOP) {
-				dragged = true;
-			}
+			if (isTouch(event)) return;
+			moveGesture(event.clientX, event.clientY);
 		},
 		{ passive: true }
 	);
@@ -210,11 +266,17 @@ export default function initHeaderCarousel(doc = document) {
 		settleTimer = setTimeout(settle, 140);
 	};
 
-	// On window, not nav: a fling often ends with the finger outside the row (or
-	// off the element entirely), and a pointerup missed there leaves pointerDown
-	// stuck true, which would block settling for the rest of the session.
-	window.addEventListener("pointerup", endPress, { passive: true });
-	window.addEventListener("pointercancel", endPress, { passive: true });
+	// On window, not nav: a fling often ends with the finger outside the row, and
+	// a release missed there would strand the gesture.
+	//
+	// touchend — NOT pointercancel. The browser fires pointercancel the instant it
+	// takes over the pan, long before the finger lifts, so treating it as a
+	// release would end the gesture while it is still being made.
+	window.addEventListener("touchend", endPress, { passive: true });
+	window.addEventListener("touchcancel", endPress, { passive: true });
+	window.addEventListener("pointerup", (event) => !isTouch(event) && endPress(), {
+		passive: true,
+	});
 
 	// First tap centres, second tap acts. Capture phase so the app's own click
 	// handlers (tool select, Clear, Submit…) never see the centring tap.
