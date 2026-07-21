@@ -104,13 +104,21 @@ header nav.is-carousel {
        item for it to reach the middle; without the (gap-causing) spacers the
        first and last buttons can never be settled on, and the snap engine
        rubber-bands away from them. Free scroll + the clamped focus rule in
-       header-carousel.js makes every button reachable. */
-    scroll-behavior: smooth;
+       header-carousel.js makes every button reachable.
+
+       And NO `scroll-behavior: smooth` here. It applies to every scroll of this
+       container including the user's finger, so touch momentum ends up fighting
+       a smooth-scroll animation for the same scrollLeft — which is what made
+       dragging feel erratic. Programmatic centring passes behavior:'smooth' to
+       scrollTo() instead. */
+    /* Inset so an end item at rest clears the edge fade below rather than
+       sitting half-dissolved against the title. */
+    padding-inline: 14px;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
     /* Fade both edges so the row reads as scrollable rather than clipped. */
-    -webkit-mask-image: linear-gradient(to right, transparent, #000 16px, #000 calc(100% - 16px), transparent);
-    mask-image: linear-gradient(to right, transparent, #000 16px, #000 calc(100% - 16px), transparent);
+    -webkit-mask-image: linear-gradient(to right, transparent, #000 10px, #000 calc(100% - 10px), transparent);
+    mask-image: linear-gradient(to right, transparent, #000 10px, #000 calc(100% - 10px), transparent);
 }
 
 header nav.is-carousel::-webkit-scrollbar {

@@ -63,18 +63,60 @@ export default function initHeaderCarousel(doc = document) {
 		});
 	};
 
-	const centre = (el) => {
+	const centre = (el, smooth = true) => {
 		if (!el) return;
 		// Computed rather than scrollIntoView, which can also scroll the document
 		// when the target is nested. The browser clamps to the valid range, so end
 		// items land as close to the middle as they can get.
-		nav.scrollLeft = el.offsetLeft - (nav.clientWidth - el.offsetWidth) / 2;
+		//
+		// Smoothness is requested PER CALL. Putting `scroll-behavior: smooth` on
+		// the element applies it to the user's finger too, so touch momentum ends
+		// up fighting the animation for the same scrollLeft — the erratic drag.
+		const left = el.offsetLeft - (nav.clientWidth - el.offsetWidth) / 2;
+		nav.scrollTo({ left, behavior: smooth ? "smooth" : "auto" });
 	};
+
+	// A drag that happens to end over a button still fires a click. Without this
+	// the capture handler cannot tell a tap from the end of a swipe, so flicking
+	// the row would "centre" whatever the finger lifted over.
+	let pressX = 0;
+	let pressY = 0;
+	let dragged = false;
+	const DRAG_SLOP = 8; // px of movement before a press stops counting as a tap
+
+	nav.addEventListener(
+		"pointerdown",
+		(event) => {
+			pressX = event.clientX;
+			pressY = event.clientY;
+			dragged = false;
+		},
+		{ passive: true }
+	);
+
+	nav.addEventListener(
+		"pointermove",
+		(event) => {
+			if (
+				Math.abs(event.clientX - pressX) > DRAG_SLOP ||
+				Math.abs(event.clientY - pressY) > DRAG_SLOP
+			) {
+				dragged = true;
+			}
+		},
+		{ passive: true }
+	);
 
 	// First tap centres, second tap acts. Capture phase so the app's own click
 	// handlers (tool select, Clear, Submit…) never see the centring tap.
 	const onClickCapture = (event) => {
 		if (!enabled) return;
+		if (dragged) {
+			// Swallow the click that terminates a swipe: it was a scroll, not a tap.
+			event.preventDefault();
+			event.stopPropagation();
+			return;
+		}
 		const item = items.find((el) => el.contains(event.target));
 		if (!item || item === focused) return; // already centred → let it through
 		event.preventDefault();
@@ -92,7 +134,7 @@ export default function initHeaderCarousel(doc = document) {
 		// because drawing.js marks the default tool active after this module runs.
 		requestAnimationFrame(() => {
 			const active = nav.querySelector(".active");
-			if (active) centre(active);
+			if (active) centre(active, false);
 			setFocused(active || focusFromScroll());
 		});
 	};
