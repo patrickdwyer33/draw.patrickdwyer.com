@@ -44,11 +44,14 @@ Order agreed 2026-07-21: prod cutover first, then `vpc-cni`, then the rest.
 
 ### Worth doing
 
-- [ ] **1. Prod cutover for `draw.patrickdwyer.com`** — the only substantial item.
-      DNS for `draw` + `objects`, the prod Cloudflare Transform Rule (Request
-      header, *not* Response), and committing `platform-gitops/apps/draw-prod.yaml`
-      (deliberately uncommitted). Dev has been stable for days; nothing blocks this
-      but the decision to do it.
+- [x] **1. Prod cutover for `draw.patrickdwyer.com`** — DONE 2026-07-21. Live and
+      verified end-to-end: health/index/simulate 200, TLS issued, origin lock 403
+      on direct S3, prod Transform Rule confirmed (200 MISS→HIT with correct cache
+      headers), and a real user drawing (`first.bin`) round-tripped. Two things bit
+      us: `apps/draw-prod.yaml` had been committed inadvertently 21h earlier
+      (pinned to `PLACEHOLDER_SHA` → ImagePullBackOff + a stuck ACME solver), and
+      CoreDNS had cached the pre-DNS NXDOMAIN so cert-manager's HTTP-01 self-check
+      failed until CoreDNS was restarted. `deploy` gained a `--prod` flag.
 - [ ] **3. Bring the Playwright touch harness into the repo as a real test.** Needs
       `playwright` as a dev dependency. It caught three defects `npm test`
       structurally cannot see, all in the same class: code that behaves correctly
@@ -67,7 +70,22 @@ Order agreed 2026-07-21: prod cutover first, then `vpc-cni`, then the rest.
 
 ### Small / cosmetic
 
-- [ ] **2. `vpc-cni` addon drift** reconcile on the cluster
+- [x] **2. `vpc-cni` addon drift** — DONE 2026-07-21. Applied `substrate/` locally,
+      targeted to the addon only: `v1.22.3-eksbuild.1` → `v1.22.4-eksbuild.3`,
+      in-place, `aws-node` DaemonSet rolled clean, both nodes stayed Ready, prod
+      kept serving. The "drift" is structural, not a fault: the config pins no
+      addon versions (a `data.aws_eks_addon_version` most-recent lookup), so every
+      plan shows the installed build trailing the newest AWS publishes.
+
+      **Two related updates deliberately NOT applied** (out of scope for "vpc-cni",
+      and one is genuinely risky):
+      - `kube-proxy` `eksbuild.13` → `.17` — safe in-place addon update; do it next
+        time the substrate is applied.
+      - node group `release_version` `1.62.1` → `1.63.0` (Bottlerocket AMI) —
+        **replaces every node**. With single-replica app pods and no PDBs, that is
+        brief prod downtime. Needs its own window and an explicit decision, not a
+        drift-reconcile. A spot interruption was mid-flight when I looked, which is
+        a reminder these nodes cycle on their own anyway.
 
 ### Explicitly NOT doing
 
