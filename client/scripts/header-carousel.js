@@ -81,8 +81,17 @@ export default function initHeaderCarousel(doc = document) {
 	// regardless of widths, momentum, or browser snapping quirks.
 	let pressIndex = -1;
 	let settleTimer = 0;
+	let pointerDown = false;
 
 	const settle = () => {
+		// Never settle under a finger that is still down. The timer keys off the
+		// scroll stopping, and a slow drag that pauses mid-row stops scrolling
+		// without ending the gesture — settling there re-centres the row while the
+		// user is still dragging it, which reads as a random jump backwards.
+		if (pointerDown) {
+			settleTimer = setTimeout(settle, 140);
+			return;
+		}
 		if (pressIndex < 0) return;
 		let landed = items.indexOf(focusFromScroll());
 		const delta = landed - pressIndex;
@@ -152,6 +161,7 @@ export default function initHeaderCarousel(doc = document) {
 			pressX = event.clientX;
 			pressY = event.clientY;
 			dragged = false;
+			pointerDown = true;
 			// Where this gesture began, so settle() can cap it at one step.
 			pressIndex = items.indexOf(focused);
 		},
@@ -171,6 +181,19 @@ export default function initHeaderCarousel(doc = document) {
 		{ passive: true }
 	);
 
+	const endPress = () => {
+		if (!pointerDown) return;
+		pointerDown = false;
+		clearTimeout(settleTimer);
+		settleTimer = setTimeout(settle, 140);
+	};
+
+	// On window, not nav: a fling often ends with the finger outside the row (or
+	// off the element entirely), and a pointerup missed there leaves pointerDown
+	// stuck true, which would block settling for the rest of the session.
+	window.addEventListener("pointerup", endPress, { passive: true });
+	window.addEventListener("pointercancel", endPress, { passive: true });
+
 	// First tap centres, second tap acts. Capture phase so the app's own click
 	// handlers (tool select, Clear, Submit…) never see the centring tap.
 	const onClickCapture = (event) => {
@@ -185,6 +208,13 @@ export default function initHeaderCarousel(doc = document) {
 		if (!item || item === focused) return; // already centred → let it through
 		event.preventDefault();
 		event.stopPropagation();
+		// Cancel the pending settle. The one-step cap is a rule about SWIPES —
+		// momentum should not carry you further than you flicked. A tap is an
+		// explicit destination and may be any distance away, so leaving pressIndex
+		// set here lets settle() mistake the jump for an over-travelled swipe and
+		// walk it back towards where the tap started.
+		pressIndex = -1;
+		clearTimeout(settleTimer);
 		setFocused(item); // set explicitly: an end item cannot be derived from scroll
 		centre(item);
 	};
