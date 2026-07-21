@@ -35,13 +35,19 @@ if (ENV === "development") {
 	// crash, which only "went away" when opening the Inspector disabled caching.
 	// The previous policy had these backwards: max-age=0 on everything, which is
 	// too weak for HTML and pure waste for fingerprinted assets.
+	// cacheControl:false is REQUIRED. Express's send() writes its own Cache-Control
+	// from its maxAge option AFTER setHeaders/headers run, silently clobbering ours
+	// (the first attempt at this fix looked correct and still shipped max-age=0).
+	// Turning it off leaves the header entirely to us.
 	const sendHtml = (res, file) =>
 		res.sendFile(path.join(dist, file), {
+			cacheControl: false,
 			headers: { "Cache-Control": "no-cache" }, // revalidate every time
 		});
 
 	app.use(
 		express.static(dist, {
+			cacheControl: false,
 			setHeaders: (res, filePath) => {
 				if (filePath.endsWith(".html")) {
 					res.setHeader("Cache-Control", "no-cache");
