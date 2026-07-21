@@ -192,11 +192,30 @@ export default async function runSimulation(canvasId, clearColor) {
 		);
 	}
 
+	// Cap the ball count to what this canvas can actually hold. MAX_BALLS alone is a
+	// desktop-sized constant: on a phone the same 4000 balls do not fit, every
+	// placement collides, and the simulation refuses to start. Each ball needs
+	// dotSize^2 of exclusive area, and random rejection sampling degrades long
+	// before the theoretical packing limit, so target a low coverage fraction.
+	const PLACEMENT_COVERAGE = 0.12;
+	const canvasArea = gl.canvas.width * gl.canvas.height;
+	const areaCap = Math.max(
+		1,
+		Math.floor((canvasArea * PLACEMENT_COVERAGE) / (dotSize * dotSize))
+	);
+	const ballBudget = Math.min(MAX_BALLS, areaCap);
+	if (ballBudget < MAX_BALLS) {
+		console.log(
+			`Canvas ${gl.canvas.width}x${gl.canvas.height} fits ~${ballBudget} balls ` +
+				`(cap ${MAX_BALLS}); down-sampling to that.`
+		);
+	}
+
 	// Apply down-sampling if needed BEFORE calculating numBalls
 	const downSampleResult = downSampleDrawingData(
 		finalPositions,
 		colors,
-		MAX_BALLS / numBallsPerDrawnPixel
+		ballBudget / numBallsPerDrawnPixel
 	);
 
 	// Update references to use sampled data
@@ -211,7 +230,7 @@ export default async function runSimulation(canvasId, clearColor) {
 		);
 	}
 
-	const numBalls = n * numBallsPerDrawnPixel;
+	let numBalls = n * numBallsPerDrawnPixel;
 
 	console.log(
 		`Initializing simulation with ${numBalls} balls for ${n} target pixels`
@@ -250,6 +269,16 @@ export default async function runSimulation(canvasId, clearColor) {
 		throw new Error(
 			`Unable to initialize simulation with ${numBalls} balls. The drawing may be too dense.`
 		);
+	}
+
+	// generateRandomPositions returns fewer than requested if the canvas filled up.
+	// Trim to what was actually placed so every per-ball array stays the same length;
+	// otherwise the tail would be balls sitting at (0,0) with no position data.
+	const placedBalls = initialPositions.length / 2;
+	if (placedBalls < numBalls) {
+		numBalls = placedBalls;
+		n = Math.floor(numBalls / numBallsPerDrawnPixel);
+		expandedColors.length = numBalls * 4;
 	}
 
 	// Initialize buffers (NOW safe because we validated placement)
@@ -368,15 +397,19 @@ function generateRandomPositions(n, width, height, dotDiameter) {
 	const positions = [];
 	const tree = new RBush(16);
 	let failedAttempts = 0;
-	const maxFailedAttempts = 1000;
+	// Budget attempts per ball rather than a flat 1000 for the whole run. Rejection
+	// sampling gets harder as the canvas fills, so a fixed global budget is a cliff
+	// that a big canvas never reaches and a small one hits immediately.
+	const maxFailedAttempts = Math.max(1000, n * 4);
 	for (let i = 0; i - failedAttempts < n; i++) {
 		if (failedAttempts > maxFailedAttempts) {
-			throw new Error(
-				`Failed to place ${n} balls in the available space. ` +
-					`This should not happen after down-sampling. ` +
-					`Current failed attempts: ${failedAttempts}. ` +
-					`Consider reducing numBallsPerDrawnPixel or increasing canvas size.`
+			// Return what fits instead of throwing. A crowded canvas is a reason to
+			// draw fewer balls, not to fail to start: the caller trims to this count.
+			console.warn(
+				`Placed ${positions.length / 2} of ${n} balls before the canvas got ` +
+					`too crowded (${width}x${height}); continuing with what fits.`
 			);
+			break;
 		}
 		const x = Math.random() * (width - dotDiameter) + dotRadius;
 		const y = Math.random() * (height - dotDiameter) + dotRadius;

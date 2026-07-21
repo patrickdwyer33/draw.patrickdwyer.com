@@ -38,8 +38,21 @@
  */
 export function resizeCanvasToDisplaySize(canvas, multiplier) {
 	multiplier = multiplier || 1;
-	const width = (canvas.clientWidth * multiplier) | 0;
-	const height = (canvas.clientHeight * multiplier) | 0;
+	// clientWidth/clientHeight can be 0 when this runs before the browser has laid
+	// the canvas out — observed in Safari, where it sized the drawing buffer to 0x0.
+	// Everything downstream then works in a zero-area world: the simulation tries to
+	// scatter thousands of balls inside 0x0, every placement collides, and it dies
+	// with "Failed to place N balls in the available space". Fall back to the
+	// measured rect, then to the viewport, so the buffer is never degenerate.
+	const rect = canvas.getBoundingClientRect();
+	const cssWidth =
+		canvas.clientWidth || Math.round(rect.width) || window.innerWidth;
+	const cssHeight =
+		canvas.clientHeight ||
+		Math.round(rect.height) ||
+		Math.round(window.innerHeight * 0.95);
+	const width = (cssWidth * multiplier) | 0;
+	const height = (cssHeight * multiplier) | 0;
 	if (canvas.width !== width || canvas.height !== height) {
 		canvas.width = width;
 		canvas.height = height;
