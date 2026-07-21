@@ -100,7 +100,12 @@ header nav.is-carousel {
     /* Room for the centred item's underline, which sits below the button. */
     padding-block: 2px 6px;
     overflow-y: hidden;
-    scroll-snap-type: x proximity;
+    /* No scroll snapping. `scroll-snap-align: center` requires space beside an
+       item for it to reach the middle; without the (gap-causing) spacers the
+       first and last buttons can never be settled on, and the snap engine
+       rubber-bands away from them. Free scroll + the clamped focus rule in
+       header-carousel.js makes every button reachable. */
+    scroll-behavior: smooth;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
     /* Fade both edges so the row reads as scrollable rather than clipped. */
@@ -114,7 +119,6 @@ header nav.is-carousel::-webkit-scrollbar {
 
 header nav.is-carousel > * {
     position: relative;
-    scroll-snap-align: center;
     flex: 0 0 auto;
     transform: scale(0.88);
     opacity: 0.5;
@@ -141,10 +145,47 @@ header nav.is-carousel > .is-centered::after {
     background: currentColor;
 }
 
+/* First tap centres, second tap acts. Letting the tap fall through to the
+   wrapper (rather than preventing the input's default) is the reliable way to
+   stop a native colour picker opening on the centring tap. */
+header nav.is-carousel > .color-picker:not(.is-centered) input {
+    pointer-events: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
     header nav.is-carousel > * {
         transition: none;
     }
+}
+
+/* The colour swatch. It was `height: 100%` with native appearance, which Safari
+   renders as a stretched, washed-out pill (Chrome happened to look fine). Fixed
+   box + appearance:none makes it a swatch on every browser, matching the
+   buttons beside it. */
+header nav .color-picker input[type="color"] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    border: 1px solid #00000022;
+    border-radius: 8px;
+    background: none;
+    cursor: pointer;
+}
+
+header nav .color-picker input[type="color"]::-webkit-color-swatch-wrapper {
+    padding: 0;
+}
+
+header nav .color-picker input[type="color"]::-webkit-color-swatch {
+    border: none;
+    border-radius: 7px;
+}
+
+header nav .color-picker input[type="color"]::-moz-color-swatch {
+    border: none;
+    border-radius: 7px;
 }
 
 /* Narrow screens: give the header a real touch-sized height instead of 5vh
@@ -172,11 +213,6 @@ header nav.is-carousel > .is-centered::after {
 
     .color-picker-label {
         display: none;
-    }
-
-    header nav .color-picker input {
-        width: 34px;
-        height: 34px;
     }
 }
 
