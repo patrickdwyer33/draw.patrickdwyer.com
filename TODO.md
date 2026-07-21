@@ -75,6 +75,43 @@ JS instrumentation is structurally blind to that half of the pipeline.
       path, not the app or the machine.
 - [ ] Cross-check **another animated WebGL page**. Stutters there too → nothing in
       this repo is involved.
+### Round 9 — "it's almost like shake it up is running"
+
+That observation reframes it again, and explains why every prior measurement came
+back clean: **a batch of balls changing state in one frame costs nothing and arrives
+on time.** Round 8's perfect timing is not evidence against a lurch — it is exactly
+what a lurch looks like from the timing side. Every measurement so far asked "was
+the frame late?", never "did the frame's contents jump?".
+
+Confirmed from the code: there is **no** shuffle besides the button. `main.js`
+wires `shakeItUp`/`refillBalls` to `click` and nothing else, `runSimulation` runs
+once, no timers, no other callers. The only mechanisms that can move balls en masse:
+
+| Mechanism | Visual |
+|---|---|
+| `startedSeeking` | hard direction change, random 200px/s → directed 100px/s at the target |
+| `stuck` | **teleport** of up to ~7px snapping onto the final position |
+| `erased` | teleport to `-1000`, ball vanishes |
+| `collisions` | velocity swaps between pairs |
+
+Added `[spike]` logging (`41d54a1`) for any frame where >40 balls change state or
+collisions exceed half the ball count.
+
+**Leading hypothesis — button retains keyboard focus.** `shake-it-up-button` is a
+`<button>`; once clicked it keeps DOM focus, and a focused button fires `click` on
+**Space or Enter**. Click SHAKE IT UP once and any later idle spacebar press re-runs
+the full rescatter. It would look exactly like shake it up because it *is* shake it
+up, be invisible to all timing instrumentation, and feel random and occasional.
+
+- [ ] **Zero-cost check first:** `rescatterBalls` already logs `Shook up N balls
+      with M failed placement attempts`. If that line appears at the moment of the
+      stutter, it is genuinely firing. If it never appears, it definitively is not.
+- [ ] If confirmed, fix is one line: `shakeButton.blur()` in the handler so the
+      button does not keep keyboard focus. Same for the refill button.
+- [ ] If `[spike]` fires instead, the named counter identifies the mechanism.
+
+### Deferred
+
 - [ ] If it does prove GPU-side, the one app-level suspect worth testing is the
       per-frame `gl.bufferSubData` into a buffer the GPU may still be reading, which
       can force a driver sync. Buffer orphaning or double-buffering would be the fix.
