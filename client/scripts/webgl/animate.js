@@ -48,6 +48,18 @@ const gapSamples = new Float32Array(SUMMARY_FRAMES);
 const gapSorted = new Float32Array(SUMMARY_FRAMES);
 let sampleIdx = 0;
 
+// Direct heap measurement. performance.memory is Chrome-only and non-standard, but
+// it is exactly what is needed here: usedJSHeapSize sampled every frame shows both
+// the allocation RATE (steady climb) and every collection (sharp drop). Crucially it
+// lets us CORRELATE a collection with that frame's interval — a GC that coincides
+// with a normal 8.3ms frame did not cause a visible hitch, however large it was.
+const HEAP = typeof performance !== "undefined" && performance.memory;
+const GC_DROP_BYTES = 200 * 1024; // a fall this size means a collection ran
+let lastHeap = 0;
+let heapAtSummaryStart = 0;
+let gcCount = 0;
+let gcDuringLongFrame = 0;
+
 function summariseFrameGaps() {
 	gapSorted.set(gapSamples);
 	gapSorted.sort();
@@ -60,12 +72,26 @@ function summariseFrameGaps() {
 		if (gapSamples[i] > median * 1.5) dropped++;
 		if (gapSamples[i] > median * 2.5) bad++;
 	}
+	let heapPart = "";
+	if (HEAP) {
+		const now = performance.memory.usedJSHeapSize;
+		const grew = now - heapAtSummaryStart;
+		// Allocation rate has to account for what GC already reclaimed in the window.
+		heapPart =
+			` | heap=${(now / 1048576).toFixed(2)}MB ` +
+			`delta=${(grew / 1024).toFixed(0)}KB ` +
+			`GCs=${gcCount} (${gcDuringLongFrame} on a long frame)`;
+		heapAtSummaryStart = now;
+		gcCount = 0;
+		gcDuringLongFrame = 0;
+	}
 	console.log(
 		`[frames] n=${SUMMARY_FRAMES} median=${median.toFixed(1)}ms ` +
 			`(~${Math.round(1000 / median)}Hz) min=${gapSorted[0].toFixed(1)} ` +
 			`p95=${p95.toFixed(1)} max=${gapSorted[SUMMARY_FRAMES - 1].toFixed(1)} | ` +
 			`dropped>1.5x: ${dropped} (${((dropped / SUMMARY_FRAMES) * 100).toFixed(1)}%) ` +
-			`| >2.5x: ${bad}`
+			`| >2.5x: ${bad}` +
+			heapPart
 	);
 }
 
@@ -128,6 +154,27 @@ export default function createAnimation(step) {
 						)}`
 				);
 			}
+			// Watch the heap every frame. A fall means a collection ran; logging the
+			// frame interval alongside it is the whole point — a GC that lands on a
+			// normal-length frame did not cause a visible hitch, whatever it freed.
+			if (HEAP && frameCount > 1) {
+				const h = performance.memory.usedJSHeapSize;
+				if (lastHeap && h < lastHeap - GC_DROP_BYTES) {
+					gcCount++;
+					const longFrame = gapMs > LONG_FRAME_MS;
+					if (longFrame) gcDuringLongFrame++;
+					console.warn(
+						`[gc] t=${now.toFixed(1)}s freed=${(
+							(lastHeap - h) /
+							1048576
+						).toFixed(2)}MB thisFrameGap=${gapMs.toFixed(1)}ms ` +
+							`${longFrame ? "<-- ON A LONG FRAME" : "(frame was normal)"}`
+					);
+				}
+				lastHeap = h;
+				if (heapAtSummaryStart === 0) heapAtSummaryStart = h;
+			}
+
 			// Skip the first frame (measured against then===0, so meaningless) and
 			// the multi-second occlusion gaps, which would swamp max/p95.
 			if (frameCount > 1 && gapMs < 1000) {
