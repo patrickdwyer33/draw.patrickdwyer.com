@@ -97,8 +97,10 @@ header nav button.active {
    --------------------------------------------------------------------------- */
 header nav.is-carousel {
     overflow-x: auto;
+    /* Room for the centred item's underline, which sits below the button. */
+    padding-block: 2px 6px;
     overflow-y: hidden;
-    scroll-snap-type: x mandatory;
+    scroll-snap-type: x proximity;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
     /* Fade both edges so the row reads as scrollable rather than clipped. */
@@ -110,14 +112,8 @@ header nav.is-carousel::-webkit-scrollbar {
     display: none;
 }
 
-/* Spacers so the first and last buttons can reach the centre of the row. */
-header nav.is-carousel::before,
-header nav.is-carousel::after {
-    content: "";
-    flex: 0 0 50%;
-}
-
 header nav.is-carousel > * {
+    position: relative;
     scroll-snap-align: center;
     flex: 0 0 auto;
     transform: scale(0.88);
@@ -128,6 +124,21 @@ header nav.is-carousel > * {
 header nav.is-carousel > .is-centered {
     transform: scale(1);
     opacity: 1;
+}
+
+/* Which item is in the middle — i.e. what a tap will hit. Distinct from the
+   selected tool, which is the filled dark pill and stays marked wherever it
+   scrolls to. currentColor keeps it legible on both: dark under a plain
+   button, white under the filled active one. */
+header nav.is-carousel > .is-centered::after {
+    content: "";
+    position: absolute;
+    left: 15%;
+    right: 15%;
+    bottom: -4px;
+    height: 2px;
+    border-radius: 2px;
+    background: currentColor;
 }
 
 @media (prefers-reduced-motion: reduce) {

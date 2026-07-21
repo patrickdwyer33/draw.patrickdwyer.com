@@ -1,16 +1,12 @@
-// Header button row → scroll-snap carousel, but ONLY when the buttons genuinely
-// do not fit. Keying off actual overflow rather than a device breakpoint means a
+// Header button row → scroll carousel, but ONLY when the buttons genuinely do
+// not fit. Keying off actual overflow rather than a device breakpoint means a
 // narrow desktop window gets the same treatment a phone does, and a phone in
 // landscape that has room does not pay for a carousel it does not need.
 //
-// Centring only MAGNIFIES. It never activates anything. With snap scrolling you
-// must pass through the buttons between you and your target, so "centre selects"
-// would mean scrolling from Draw to Submit silently leaves you holding the
-// eraser. Every action stays a deliberate tap.
-
-// A narrow band at the middle of the row. A button overlapping it is "centred".
-// Buttons are far wider than 4% of the row, so at most one ever matches.
-const CENTRE_BAND = "0px -48% 0px -48%";
+// Centring only MAGNIFIES and underlines. It never activates anything. With
+// snap scrolling you must pass through the buttons between you and your target,
+// so "centre selects" would mean scrolling from Draw to Submit silently leaves
+// you holding the eraser. Every action stays a deliberate tap.
 
 export default function initHeaderCarousel(doc = document) {
 	const nav = doc.querySelector("header nav");
@@ -19,44 +15,73 @@ export default function initHeaderCarousel(doc = document) {
 	const items = Array.from(nav.children).filter((el) => el.nodeType === 1);
 	if (items.length === 0) return;
 
-	let observer = null;
+	let enabled = false;
+	let frame = 0;
+
+	// Mark whichever item is nearest the middle of the visible row.
+	//
+	// This replaced an IntersectionObserver watching a narrow band at the centre.
+	// That approach needs 50%-wide spacers at both ends so the first and last
+	// items can physically reach the middle — and those spacers ARE a half-row of
+	// empty space, which is what showed up as a big gap between the title and the
+	// colour swatch. Without them nothing can occupy the exact centre at the
+	// scroll extremes, so "is it in the centre band?" becomes "which is closest?",
+	// which degrades correctly at both ends.
+	const markCentred = () => {
+		const middle = nav.scrollLeft + nav.clientWidth / 2;
+		let closest = null;
+		let closestDistance = Infinity;
+		for (const el of items) {
+			const distance = Math.abs(el.offsetLeft + el.offsetWidth / 2 - middle);
+			if (distance < closestDistance) {
+				closestDistance = distance;
+				closest = el;
+			}
+		}
+		for (const el of items) el.classList.toggle("is-centered", el === closest);
+	};
+
+	const scheduleMark = () => {
+		if (frame) return;
+		frame = requestAnimationFrame(() => {
+			frame = 0;
+			markCentred();
+		});
+	};
 
 	const centre = (el) => {
 		if (!el) return;
-		// Compute the scroll position directly rather than using scrollIntoView,
-		// which can also scroll the page/document when the target is nested.
+		// Computed directly rather than via scrollIntoView, which can also scroll
+		// the document when the target is nested. The browser clamps to the valid
+		// scroll range, so end items simply land as close as they can.
 		nav.scrollLeft = el.offsetLeft - (nav.clientWidth - el.offsetWidth) / 2;
 	};
 
 	const enable = () => {
-		if (observer) return;
+		if (enabled) return;
+		enabled = true;
 		nav.classList.add("is-carousel");
-		observer = new IntersectionObserver(
-			(entries) => {
-				for (const entry of entries) {
-					entry.target.classList.toggle("is-centered", entry.isIntersecting);
-				}
-			},
-			{ root: nav, rootMargin: CENTRE_BAND, threshold: 0 }
-		);
-		items.forEach((el) => observer.observe(el));
-		// Open on the selected tool rather than an arbitrary edge, so the row
-		// starts by showing what you are currently holding.
-		requestAnimationFrame(() => centre(nav.querySelector(".active") || items[0]));
+		nav.addEventListener("scroll", scheduleMark, { passive: true });
+		// Open on the selected tool rather than an arbitrary edge. Deferred a frame
+		// because drawing.js marks the default tool active after this module runs.
+		requestAnimationFrame(() => {
+			centre(nav.querySelector(".active"));
+			markCentred();
+		});
 	};
 
 	const disable = () => {
-		if (!observer) return;
-		observer.disconnect();
-		observer = null;
+		if (!enabled) return;
+		enabled = false;
+		nav.removeEventListener("scroll", scheduleMark);
 		nav.classList.remove("is-carousel");
 		items.forEach((el) => el.classList.remove("is-centered"));
 		nav.scrollLeft = 0;
 	};
 
 	// Measure without the carousel's own styles interfering: `.is-carousel` adds
-	// 50% spacers on both sides, so once enabled the row ALWAYS overflows and the
-	// check would never turn itself back off. Drop the class, measure, restore.
+	// horizontal padding and scaling, so measuring with it applied would skew the
+	// decision to keep itself on.
 	const overflows = () => {
 		const wasCarousel = nav.classList.contains("is-carousel");
 		if (wasCarousel) nav.classList.remove("is-carousel");
@@ -67,15 +92,16 @@ export default function initHeaderCarousel(doc = document) {
 
 	const sync = () => (overflows() ? enable() : disable());
 
-	// Tapping a button centres it — confirms the tap and keeps the row anchored
-	// on whatever you just did.
+	// Tapping centres what you tapped — confirms the tap and keeps the row
+	// anchored on whatever you just did.
 	nav.addEventListener("click", (event) => {
+		if (!enabled) return;
 		const item = items.find((el) => el.contains(event.target));
-		if (item && nav.classList.contains("is-carousel")) centre(item);
+		if (item) centre(item);
 	});
 
-	// Re-evaluate when the available width changes: rotation, window resize, or
-	// the title text changing length (the simulate page sets it from the drawing).
+	// Re-evaluate when available width changes: rotation, window resize, or the
+	// title text changing length (simulate.html sets it from the drawing name).
 	if (typeof ResizeObserver !== "undefined") {
 		new ResizeObserver(sync).observe(nav.parentElement || nav);
 	} else {
