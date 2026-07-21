@@ -329,3 +329,65 @@ header nav .color-picker input[type="color"]::-moz-color-swatch {
 #modal-submit:hover {
     background-color: #0056b3;
 }
+
+/* ---------------------------------------------------------------------------
+   Eraser size picker.
+
+   Fixed-position and appended to <body> rather than nested in the nav: the nav
+   becomes a horizontal scroller on narrow screens, and a popover inside a
+   scroll container gets clipped by it. eraser-size.js positions this against
+   the button's viewport rect.
+
+   The pink is a classic pencil eraser — it identifies the tool without a label,
+   which matters because the circles carry the size and nothing else does.
+   --------------------------------------------------------------------------- */
+.eraser-sizes {
+    position: fixed;
+    z-index: 1100;
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.35rem;
+    border: 1px solid #00000022;
+    border-radius: 10px;
+    background: #fff;
+    box-shadow: 0 6px 18px #0000002e;
+}
+
+.eraser-sizes[hidden] {
+    display: none;
+}
+
+/* Square and equal-sized so the DOTS carry the size difference, not the
+   buttons — three buttons of increasing width would read as a size scale on
+   their own and fight the circles. */
+.eraser-size {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    background: none;
+    cursor: pointer;
+    -webkit-appearance: none;
+    appearance: none;
+}
+
+.eraser-size:hover {
+    background: #f2f2f2;
+}
+
+.eraser-size.is-selected {
+    border-color: #e8927c;
+    background: #fdeeea;
+}
+
+.eraser-dot {
+    display: block;
+    border-radius: 50%;
+    background: #f4a09a;
+    border: 1px solid #d9756a;
+}

@@ -1,4 +1,5 @@
 import { pipe } from "/scripts/utils/fp.js";
+import initEraserSizePicker from "/scripts/eraser-size.js";
 import { encodeDrawing } from "/shared/codec.js";
 import { objectsBase } from "/scripts/utils/objects-host.js";
 
@@ -38,10 +39,22 @@ const createDrawingState = (fillColor) => ({
 	color: "#ffffff",
 	fillColor,
 	lineWidth: 2,
+	eraserWidth: 22, // medium; see ERASER_SIZES in eraser-size.js
 	lastX: 0,
 	lastY: 0,
 	ctx: null,
 });
+
+// The one place tool identity becomes canvas state. It used to be inlined in
+// handleToolChange, which set strokeStyle but never updated state.currentTool —
+// so the eraser guard in handleColorChange never fired and choosing a colour
+// mid-erase silently turned the eraser into a pen. Size makes that worse (both
+// colour AND width must be re-applied), so it lives in one function now.
+const applyTool = (state) => {
+	const erasing = state.currentTool === "eraser";
+	state.ctx.strokeStyle = erasing ? state.fillColor : state.color;
+	state.ctx.lineWidth = erasing ? state.eraserWidth : state.lineWidth;
+};
 
 const createDrawingHandlers = (state, canvas) => ({
 	handleMouseDown: (e) => {
@@ -67,9 +80,8 @@ const createDrawingHandlers = (state, canvas) => ({
 		// Add active class to clicked button
 		e.target?.classList.add("active");
 
-		// Update stroke style
-		state.ctx.strokeStyle =
-			e.target?.id === "eraser-button" ? "#000000" : state.color;
+		state.currentTool = e.target?.id === "eraser-button" ? "eraser" : "pencil";
+		applyTool(state);
 	},
 
 	handleClear: () => {
@@ -78,9 +90,12 @@ const createDrawingHandlers = (state, canvas) => ({
 
 	handleColorChange: (e) => {
 		state.color = e.target.value;
-		if (state.currentTool !== "eraser") {
-			state.ctx.strokeStyle = state.color;
-		}
+		applyTool(state); // no-op for the pen colour while erasing
+	},
+
+	handleEraserSize: (width) => {
+		state.eraserWidth = width;
+		applyTool(state);
 	},
 
 	handleSubmit: () => {
@@ -219,10 +234,19 @@ export default function setupUserDrawing(document, canvasId, clearColor) {
 	canvas.addEventListener("pointercancel", handlers.handleMouseUp);
 	canvas.addEventListener("pointerleave", handlers.handleMouseUp);
 
+	// Opens on the click that actually selects the eraser. Under the carousel a
+	// first tap only centres the button and is swallowed before it reaches here,
+	// so the popover cannot appear for a tool you have not selected yet.
+	const eraserSizes = initEraserSizePicker(document, handlers.handleEraserSize);
+
 	document
 		.querySelectorAll("#pencil-button,#eraser-button")
 		.forEach((ele) =>
-			ele.addEventListener("click", handlers.handleToolChange)
+			ele.addEventListener("click", (e) => {
+				handlers.handleToolChange(e);
+				if (state.currentTool === "eraser") eraserSizes.open();
+				else eraserSizes.close();
+			})
 		);
 	document
 		.querySelector("#clear-button")
