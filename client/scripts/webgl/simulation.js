@@ -21,7 +21,8 @@ import fragmentShaderSource from "/shaders/fragment/basic.frag?raw";
 const DEBUG =
 	typeof location !== "undefined" &&
 	new URLSearchParams(location.search).has("debug");
-const SPIKE = 40; // balls changing state in ONE frame before it is worth reporting
+const SPIKE = 40;
+let lastSpikeLogAt = -1; // balls changing state in ONE frame before it is worth reporting
 
 const MAX_BALLS = 4000;
 const VELOCITY_SCALE = 200.0;
@@ -788,8 +789,11 @@ function updateAnimationState(
 	}
 
 	for (let i = 0; i < n; i++) {
-		// Skip erased balls
-		if (state.ballErased[i]) continue;
+		// Skip erased balls, and STUCK balls: a stuck ball sits exactly on its final
+		// position with zero velocity, so re-running the snap test on it every frame
+		// re-snaps it and re-sets ballStuck forever. Pure waste, and it made the
+		// debug counter below report the cumulative stuck total instead of new sticks.
+		if (state.ballErased[i] || state.ballStuck[i]) continue;
 
 		const xIndexOffset = i * 2;
 		const yIndexOffset = xIndexOffset + 1;
@@ -832,8 +836,10 @@ function updateAnimationState(
 	// names which mechanism did it, and how many.
 	if (
 		DEBUG &&
-		(nSeeking > SPIKE || nErased > SPIKE || nStuck > SPIKE || nCollisions > n * 0.5)
+		(nSeeking > SPIKE || nErased > SPIKE || nStuck > SPIKE || nCollisions > n * 0.5) &&
+		state.elapsedTime - lastSpikeLogAt > 1 // at most one line per second, ever
 	) {
+		lastSpikeLogAt = state.elapsedTime;
 		console.warn(
 			`[spike] t=${state.elapsedTime.toFixed(1)}s ` +
 				`startedSeeking=${nSeeking} erased=${nErased} stuck=${nStuck} ` +
