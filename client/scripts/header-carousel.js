@@ -195,12 +195,21 @@ export default function initHeaderCarousel(doc = document) {
 		nav.classList.add("is-carousel");
 		sizeEdgePadding();
 		nav.addEventListener("scroll", onScroll, { passive: true });
-		// Open on the selected tool rather than an arbitrary edge. Deferred a frame
-		// because drawing.js marks the default tool active after this module runs.
+		// Open on the colour swatch when there is one, otherwise the selected tool.
+		//
+		// The swatch is the only control whose STATE you need to see rather than
+		// just reach — it shows the colour you are about to draw with. Parked
+		// anywhere but the focus slot it is scrolled out of sight on load, so the
+		// page opens with no indication of the current colour. The selected tool
+		// needs no such help: `.active` keeps it a filled dark pill wherever it
+		// scrolls to.
+		//
+		// Deferred a frame because drawing.js marks the default tool active after
+		// this module runs.
 		requestAnimationFrame(() => {
-			const active = nav.querySelector(".active");
-			if (active) centre(active, false);
-			setFocused(active || focusFromScroll());
+			const start = nav.querySelector(".color-picker") || nav.querySelector(".active");
+			if (start) centre(start, false);
+			setFocused(start || focusFromScroll());
 		});
 	};
 
