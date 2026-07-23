@@ -157,12 +157,3 @@ on desktop.
 verifying with a mouse. The bug class — the browser firing `pointercancel` and
 cutting the event stream the moment it claims a pan — is invisible on desktop by
 construction. Touch emulation found both in minutes.
-
----
-
-## Deferred (agreed, not urgent)
-
-- [ ] **Prod cutover for `draw.patrickdwyer.com`**: DNS for `draw` + `objects`,
-      the prod Cloudflare Transform Rule (Request header, *not* Response), and
-      committing `platform-gitops/apps/draw-prod.yaml` (deliberately uncommitted today).
-- [ ] `vpc-cni` addon drift reconcile on the cluster
