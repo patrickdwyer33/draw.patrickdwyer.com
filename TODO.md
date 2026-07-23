@@ -52,21 +52,20 @@ Order agreed 2026-07-21: prod cutover first, then `vpc-cni`, then the rest.
       (pinned to `PLACEHOLDER_SHA` → ImagePullBackOff + a stuck ACME solver), and
       CoreDNS had cached the pre-DNS NXDOMAIN so cert-manager's HTTP-01 self-check
       failed until CoreDNS was restarted. `deploy` gained a `--prod` flag.
-- [ ] **3. Bring the Playwright touch harness into the repo as a real test.** Needs
-      `playwright` as a dev dependency. It caught three defects `npm test`
-      structurally cannot see, all in the same class: code that behaves correctly
-      with a mouse and wrongly under a finger, because the browser cancels pointer
-      events when it takes over a pan. Scripts currently live only in the session
-      scratchpad and will be lost.
-- [ ] **4. `platform-gitops/deploy` masks AWS errors as "tag not found".** The
-      `describe-images` check pipes stderr to `/dev/null`, so expired credentials, a
-      wrong region, or a network failure all report `tag '<sha>' not found in ECR
-      repo draw`. Hit twice during this work, in exactly the moment a straight
-      answer was needed.
-- [ ] **5. CI builds are not reproducible.** `package-lock.json` is both gitignored and
-      dockerignored, so every Docker build resolves dependencies fresh — the CI
-      bundle hash differs from a local build of identical source. Benign so far, but
-      a breaking transitive update would land silently.
+- [x] **3. `platform-gitops/deploy` masks AWS errors as "tag not found"** — DONE
+      2026-07-22 (`ca91671`). Preflight `sts get-caller-identity` up front, and the
+      existence check now classifies describe-images stderr (ImageNotFound → "tag
+      not found"; anything else printed verbatim, labelled NOT a missing tag).
+      `classify_ecr_error` factored out pure + unit-tested. Verified live: an
+      expired session now says so instead of blaming a missing tag.
+- [x] **4. CI builds are not reproducible** — DONE 2026-07-22 (`25398d3`). Committed
+      the lockfile (un-git/dockerignored), added cross-platform optionalDependencies
+      for the native rollup/esbuild binaries (musl for the alpine image), and
+      switched both Dockerfile stages to `npm ci`. Verified: two --no-cache
+      linux/amd64 builds of identical source now produce byte-identical bundle
+      hashes, and CI is green. Maintenance tail: a vite bump must update the pinned
+      rollup/esbuild versions in optionalDependencies or `npm ci` fails the lock
+      sync check (intentional — cannot drift silently).
 
 ### Small / cosmetic
 
