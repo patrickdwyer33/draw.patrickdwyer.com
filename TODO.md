@@ -76,15 +76,14 @@ Order agreed 2026-07-21: prod cutover first, then `vpc-cni`, then the rest.
       addon versions (a `data.aws_eks_addon_version` most-recent lookup), so every
       plan shows the installed build trailing the newest AWS publishes.
 
-      **Two related updates deliberately NOT applied** (out of scope for "vpc-cni",
-      and one is genuinely risky):
-      - `kube-proxy` `eksbuild.13` → `.17` — safe in-place addon update; do it next
-        time the substrate is applied.
-      - node group `release_version` `1.62.1` → `1.63.0` (Bottlerocket AMI) —
-        **replaces every node**. With single-replica app pods and no PDBs, that is
-        brief prod downtime. Needs its own window and an explicit decision, not a
-        drift-reconcile. A spot interruption was mid-flight when I looked, which is
-        a reminder these nodes cycle on their own anyway.
+      **Follow-ups, both DONE 2026-07-23:**
+      - `kube-proxy` `eksbuild.13` → `.17` — applied in-place, ACTIVE, no issues.
+      - node group `release_version` `1.62.1` → `1.63.0` (Bottlerocket AMI) — rolled;
+        both nodes now Bottlerocket 1.63.0 / kubelet v1.33.12, apps stayed 1/1, dev
+        + prod kept serving 200. Left a note: a full substrate `terraform plan` now
+        shows two stale OUTPUTS (`draw_objects_role_arn`, `cf_origin_secret`) wanting
+        to go null — they were moved to the app-infra layer in an earlier refactor
+        and linger in substrate state. Harmless (touches no infra), not applied.
 
 ### Explicitly NOT doing
 
