@@ -4,4 +4,3 @@ dist
 dev-dist
 .git
 .DS_Store
-package-lock.json
