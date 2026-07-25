@@ -93,6 +93,12 @@ Order agreed 2026-07-21: prod cutover first, then `vpc-cni`, then the rest.
   a loop that is already ~6% of budget. Left here as rejected, not pending.
 - **The `?debug` instrumentation.** Opt-in, costs nothing when off, and earned its
   keep repeatedly. Keep it.
+- **2-replica + PodDisruptionBudget for `draw`.** Considered 2026-07-23 for
+  zero-downtime node rolls; declined 2026-07-25. The app is stateless (S3-backed)
+  so it would be safe, but a rare few-second blip on prod during infrequent node
+  rolls / spot interruptions is acceptable for a personal site, and it isn't worth
+  a permanently-doubled pod footprint. Revisit only if maintenance blips become a
+  real annoyance.
 
 ---
 
