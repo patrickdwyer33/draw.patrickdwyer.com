@@ -45,11 +45,9 @@ const createDrawingState = (fillColor) => ({
 	ctx: null,
 });
 
-// The one place tool identity becomes canvas state. It used to be inlined in
-// handleToolChange, which set strokeStyle but never updated state.currentTool —
-// so the eraser guard in handleColorChange never fired and choosing a colour
-// mid-erase silently turned the eraser into a pen. Size makes that worse (both
-// colour AND width must be re-applied), so it lives in one function now.
+// Single place tool identity becomes canvas state — both stroke colour and
+// width, applied together. Keeps an eraser an eraser after a colour change:
+// changing colour mid-erase must not leak the pen colour onto the eraser.
 const applyTool = (state) => {
 	const erasing = state.currentTool === "eraser";
 	state.ctx.strokeStyle = erasing ? state.fillColor : state.color;

@@ -605,9 +605,8 @@ function findCollidingNeighbor(state, i, dotSizeSquared) {
 }
 
 function drawScene(gl, programInfo, buffers, clearColor, n, state) {
-	// Indexed rather than spread: `...clearColor` builds an iterator on every frame.
-	// One small allocation per frame is nothing next to what processCollision used to
-	// do, but the goal here is a genuinely allocation-free frame, so it goes too.
+	// Indexed rather than spread: `...clearColor` builds an iterator every frame,
+	// and the goal is a genuinely allocation-free frame.
 	gl.clearColor(clearColor[0], clearColor[1], clearColor[2], clearColor[3]);
 	gl.clear(gl.COLOR_BUFFER_BIT);
 
@@ -916,14 +915,11 @@ function updateAnimationState(
 // line between them, swap the components along that line, rotate back. Results are
 // written straight back into `velocities`.
 //
-// This used to take 8 scalars and RETURN a fresh [v1x, v1y, v2x, v2y] array, which
-// the caller destructured. That allocated one short-lived array per colliding pair
-// per frame -- thousands a second. Most died in the young generation, but enough
-// got promoted to trigger a major GC every so often, and that pause is the periodic
-// one-frame hitch: smooth for ~10s, one big stutter, smooth again. Writing in place
-// removes the last per-frame allocation in the simulation.
-//
-// Also hoists cos(phi)/sin(phi), which were each being recomputed four times.
+// Writes in place rather than returning a fresh [v1x,v1y,v2x,v2y] array: with
+// thousands of collisions a second, per-pair allocation promotes enough to the
+// old generation to trigger periodic major-GC hitches. This is the last
+// per-frame allocation removed from the simulation. cos(phi)/sin(phi) are
+// hoisted since each is used four times.
 function processCollision(positions, velocities, i, j) {
 	const ix = i * 2;
 	const iy = ix + 1;

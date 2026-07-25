@@ -21,8 +21,7 @@ if (ENV === "development") {
 	});
 	app.use(vite.middlewares);
 } else {
-	// Production: serve the static build. The bug this fixes: the old code mounted
-	// the client ONLY in development, so a prod container served /api and nothing else.
+	// Production: serve the static build (dev serves the client via Vite above).
 	const __dirname = path.dirname(fileURLToPath(import.meta.url));
 	const dist = path.join(__dirname, "../client/dist");
 	// Cache policy, split by what the filename guarantees.
@@ -30,11 +29,7 @@ if (ENV === "development") {
 	// Vite fingerprints bundles (main-D4VH3bq2.js), so their contents can never
 	// change under a given name — cache them for a year, immutable. HTML is the
 	// opposite: it is the index naming WHICH bundle to load, so a stale copy pins
-	// a visitor to old code indefinitely. That is not hypothetical — a stale
-	// /simulate kept serving a pre-fix bundle and reproduced an already-fixed
-	// crash, which only "went away" when opening the Inspector disabled caching.
-	// The previous policy had these backwards: max-age=0 on everything, which is
-	// too weak for HTML and pure waste for fingerprinted assets.
+	// a visitor to old code indefinitely, hence no-cache/revalidate on HTML.
 	// cacheControl:false is REQUIRED. Express's send() writes its own Cache-Control
 	// from its maxAge option AFTER setHeaders/headers run, silently clobbering ours
 	// (the first attempt at this fix looked correct and still shipped max-age=0).

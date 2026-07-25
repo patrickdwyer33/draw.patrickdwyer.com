@@ -86,10 +86,9 @@ export default function initHeaderCarousel(doc = document) {
 		// scroll stopping, and a slow drag that pauses stops scrolling without
 		// ending the gesture, so settling there re-centres under the user.
 		//
-		// The staleness check is what makes this safe. An earlier version deferred
-		// on pointerDown alone, so a release event that never arrived left settle
-		// rescheduling itself every 140ms — the carousel silently stopped settling
-		// for the rest of the session.
+		// Bound the wait by staleness, not pointerDown alone: a release event that
+		// never arrives must not leave settle rescheduling itself forever and the
+		// carousel unable to come to rest.
 		if (pointerDown && performance.now() - lastMoveAt < STALE_GESTURE_MS) {
 			settleTimer = setTimeout(settle, 140);
 			return;
@@ -98,15 +97,9 @@ export default function initHeaderCarousel(doc = document) {
 		// to whatever item happened to be passing the slot at that instant.
 		if (performance.now() < suppressSettleUntil) return;
 
-		// Snap to whatever is AT the slot, which is exactly what the highlight has
-		// been showing throughout the scroll.
-		//
-		// This used to cap the landing at how far the finger travelled, to stop
-		// momentum overshooting. That cap fought the user rather than helping: the
-		// row highlights the item at the slot live, so capping moved you somewhere
-		// other than the button you just watched light up — worst on a fast flick,
-		// where momentum and finger distance diverge most. The cap existed to stop
-		// CSS scroll-snap skipping buttons, and CSS snapping is long gone.
+		// Snap to whatever is AT the slot — exactly what the highlight has shown
+		// throughout the scroll, so you land on the button you watched light up.
+		// Deliberately no cap on travel distance: it would move you off that button.
 		const target = focusFromScroll();
 		setFocused(target);
 		if (Math.abs(nav.scrollLeft - scrollLeftFor(target)) > 1) centre(target);
